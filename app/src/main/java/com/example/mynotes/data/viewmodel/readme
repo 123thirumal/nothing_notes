@@ -1,0 +1,4 @@
+In database, a note is stored as a list of NoteBlockModel. While displaying a note in the UI,
+List<NoteBlockModel> is converted to List<NoteBlockEntityModel>
+
+

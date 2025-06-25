@@ -1,0 +1,27 @@
+# Gradle
+.gradle/
+build/
+*/build/
+.externalNativeBuild/
+.cxx/
+
+# Local Configuration
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.kotlinc/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Android
+captures/
+
+# Jetpack Compose Previews (optional)
+.idea/.preview/
+.idea/preview.html
