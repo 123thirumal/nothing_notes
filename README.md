@@ -65,5 +65,5 @@ Notes is a Nothing Style Themed and simple note-taking Android app built with Ko
 
 1. Clone the repo:
    ```bash
-   git clone https://github.com/<your-username>/MyNotes.git
+   git clone https://github.com/123thirumal/MyNotes.git
    cd MyNotes
