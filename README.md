@@ -4,6 +4,10 @@ Notes is a Nothing Style Themed and simple note-taking Android app built with Ko
 
 ---
 
+📥 [Download APK](https://github.com/123thirumal/nothing_notes/releases/download/release/app-release.apk)
+
+---
+
 ## ✨ Features
 
 - 📝 Create rich notes with text and images
