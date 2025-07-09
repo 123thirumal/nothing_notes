@@ -23,7 +23,6 @@ import com.example.mynotes.pages.NotePage
 import com.example.mynotes.pages.HomePage
 import com.example.mynotes.pages.PrivateLockPage
 import com.example.mynotes.pages.PrivateLockSetupPage
-import com.example.mynotes.pages.RecordingPage
 import com.example.mynotes.pages.RemovePrivateFilesPage
 
 
