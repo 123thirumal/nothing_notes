@@ -69,6 +69,12 @@ fun convertToNoteBlockEntityModel(
             )
         }
 
+        "voice_note" ->{
+            return NoteBlockEntityModel.VoiceBlock(
+                uri = mutableStateOf(block.audioPath?.toUri())
+            )
+        }
+
         else -> {
             throw IllegalArgumentException("Unsupported block type: ${block.type}")
         }

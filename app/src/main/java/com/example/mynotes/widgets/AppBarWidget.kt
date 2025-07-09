@@ -151,7 +151,7 @@ fun AppBarWidget(searchSelect: MutableState<Boolean>, searchToggle: ()->Unit, he
                                     isSelectedFolders.value=!isSelectedFolders.value
                                 }
                             }
-                            else if(headSelect.value=="PRIVATE"){
+                            else if(headSelect.value=="PRIVATE"&&isUnlocked.value){
                                 if(isSelectedFilesInPrivate.value){
                                     selectedFilesInPrivate.clear()
                                     isSelectedFilesInPrivate.value=!isSelectedFilesInPrivate.value

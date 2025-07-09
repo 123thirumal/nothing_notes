@@ -285,7 +285,7 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                 noteViewModel.updateNote(updatedNote) // suspend call awaits
             }
             Toast.makeText(context, "Moved To Folder", Toast.LENGTH_SHORT).show()
-            noteViewModel.setIsUpdateDone(bool=false)
+            selectedNoteList.clear()
             showDialogForAddFolderWithSelected.value = false
             isSelectedFiles.value=false
         }
@@ -571,6 +571,7 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                                         noteViewModel.updateNote(updatedNote) //awaits
                                     }
                                     Toast.makeText(context,"Notes Moved to Private Files", Toast.LENGTH_SHORT).show()
+                                    selectedNoteList.clear()
                                     showDialogForPrivateFilesWithSelected.value=false
                                 }
                             }
@@ -645,6 +646,7 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                                     noteViewModel.deleteNote(note)//awaits
                                 }
                                 Toast.makeText(context,"Notes Deleted", Toast.LENGTH_SHORT).show()
+                                selectedNoteList.clear()
                                 showDialogForDeleteWithSelected.value=false
                             }
                         }) {
@@ -692,6 +694,7 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                 folderViewModel.deleteFolder(folder)//awaits
             }
             Toast.makeText(context, "Folder Deleted with Files", Toast.LENGTH_SHORT).show()
+            selectedFolderList.clear()
             showDialogForFoldersDeleteWithSelected.value=false
             deleteFoldersWithFilesRequestWithSelected.value=false
         }
@@ -754,6 +757,7 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                                 }
                             }
                             Toast.makeText(context, "Folders Deleted", Toast.LENGTH_SHORT).show()
+                            selectedFolderList.clear()
                             showDialogForFoldersDeleteWithSelected.value=false
                         }) {
                         Text(modifier = Modifier.padding(vertical = 5.dp), text = "DELETE ONLY FOLDERS", style = TextStyle(
@@ -833,6 +837,7 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                                     noteViewModel.updateNote(updatedNote) //awaits
                                 }
                                 Toast.makeText(context,"Notes Moved to Public Files", Toast.LENGTH_SHORT).show()
+                                selectedNoteListInPrivate.clear()
                                 showDialogToUnlockPrivateFilesWithSelected.value=false
                             }
                         }) {
@@ -907,6 +912,7 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                                     noteViewModel.deleteNote(note)//awaits
                                 }
                                 Toast.makeText(context,"Notes Deleted", Toast.LENGTH_SHORT).show()
+                                selectedNoteListInPrivate.clear()
                                 showDialogForPrivateFilesDeleteWithSelected.value=false
                             }
                         }) {

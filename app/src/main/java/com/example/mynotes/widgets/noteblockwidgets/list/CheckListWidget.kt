@@ -15,6 +15,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
@@ -104,6 +105,19 @@ fun CheckListWidget(checkListBlock: NoteBlockEntityModel.CheckListBlock, isChang
                         fontWeight = FontWeight.W100,
                         textDecoration = if(isChecked.value) TextDecoration.LineThrough else TextDecoration.None
                     ),
+                    decorationBox = { innerTextField ->
+                        if (text.value.isEmpty()) {
+                            Text(
+                                text = " ...",
+                                style = TextStyle(
+                                    fontFamily = NRegular,
+                                    fontSize = 16.sp,
+                                    color = Color(0xFF8C8C8C)
+                                )
+                            )
+                        }
+                        innerTextField()
+                    },
                     cursorBrush = SolidColor(Color.White),
                     keyboardOptions = KeyboardOptions.Default.copy(
                         imeAction = ImeAction.Next

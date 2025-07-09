@@ -19,7 +19,7 @@ data class NoteBlockModel(
 
     val noteId: Long, // Foreign key to NoteModel
 
-    val type: String, // "text", "image", "bulleted_list", "numbered_list", "check_list".
+    val type: String, // "text", "image", "bulleted_list", "numbered_list", "check_list", "voice_note"
 
     //for text
     val description: String? = null,
@@ -35,6 +35,10 @@ data class NoteBlockModel(
     val checklistItems: String? = null,
     val numberedItems: String? = null,
     val bulletedItems: String? = null,
+
+
+    //for voice_note
+    val audioPath: String? = null,
 
     val blockOrder: Int = 0 // Optional: for keeping order inside the note
 ){}

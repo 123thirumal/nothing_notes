@@ -17,7 +17,7 @@ import com.example.mynotes.model.NoteModel
 
 @Database(
     entities = [NoteModel::class, FolderModel::class, LockModel::class, NoteBlockModel::class, ImageDemoModel::class],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class NotesDatabase: RoomDatabase(){

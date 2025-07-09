@@ -3,6 +3,7 @@ package com.example.mynotes.pages
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -52,9 +54,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -64,21 +69,30 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.example.mynotes.R
+import com.example.mynotes.data.viewmodel.LockViewModel
+import com.example.mynotes.data.viewmodel.NoteBlockViewModel
 import com.example.mynotes.data.viewmodel.NoteViewModel
 import com.example.mynotes.model.FolderModel
 import com.example.mynotes.model.NoteModel
 import com.example.mynotes.ui.theme.NDot
 import com.example.mynotes.ui.theme.NRegular
+import com.example.mynotes.widgets.FolderWidget
 import com.example.mynotes.widgets.NoteWidget
 import compose.icons.TablerIcons
 import compose.icons.tablericons.ArrowLeft
+import compose.icons.tablericons.CircleCheck
 import compose.icons.tablericons.CursorText
+import compose.icons.tablericons.Lock
+import compose.icons.tablericons.Plus
 import compose.icons.tablericons.Settings
 import compose.icons.tablericons.Trash
 import kotlinx.coroutines.launch
 
 @Composable
-fun FolderPage(folderId:Long,navController: NavController, folderViewModel: FolderViewModel, noteViewModel: NoteViewModel){
+fun FolderPage(folderId:Long,navController: NavController, folderViewModel: FolderViewModel, noteViewModel: NoteViewModel,
+               lockViewModel: LockViewModel,noteBlockViewModel: NoteBlockViewModel){
 
 
     val context = LocalContext.current
@@ -302,9 +316,18 @@ fun FolderPage(folderId:Long,navController: NavController, folderViewModel: Fold
         }
     }
 
+    val isSelectedFilesInFolder = remember{mutableStateOf(false)}
+    val selectedFilesListInFolder = remember{mutableStateListOf<NoteModel>()}
+
     BackHandler(enabled = !deleteWithFilesRequest.value) {
         //disable when deleting
-        navController.popBackStack()
+        if(isSelectedFilesInFolder.value){
+            isSelectedFilesInFolder.value=false
+            selectedFilesListInFolder.clear()
+        }
+        else{
+            navController.popBackStack()
+        }
     }
 
 
@@ -312,8 +335,413 @@ fun FolderPage(folderId:Long,navController: NavController, folderViewModel: Fold
     val expandedSettings = remember{mutableStateOf(false)}
 
 
-    val isSelectedFilesInFolder = remember{mutableStateOf(false)}
-    val selectedFilesListInFolder = remember{mutableStateListOf<NoteModel>()}
+    //=======================================Select operations inside folder page============================================
+    //for adding a note to a folder
+    val showDialogForAddFolderWithSelected = remember{mutableStateOf(false)}
+    val showDialogForNewFolderWithSelected = remember { mutableStateOf(false) } //for creating new folder
+
+    fun updateFolderForSelectedFiles(folderId: Long){
+        coroutineScope.launch {
+            selectedFilesListInFolder.forEach { note->
+                val updatedNote = note.copy(
+                    folderId = folderId
+                )
+                noteViewModel.updateNote(updatedNote) // suspend call awaits
+            }
+            Toast.makeText(context, "Moved To Folder", Toast.LENGTH_SHORT).show()
+            selectedFilesListInFolder.clear()
+            showDialogForAddFolderWithSelected.value = false
+            isSelectedFilesInFolder.value=false
+        }
+    }
+
+    if(showDialogForAddFolderWithSelected.value){ //for adding a note to a folder
+        Dialog(properties = DialogProperties(usePlatformDefaultWidth = false),
+            onDismissRequest = {
+                showDialogForAddFolderWithSelected.value = false
+            }) {
+            Box(
+                modifier = Modifier
+                    .width(360.dp)// You can control width here!
+                    .height(600.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFA131313))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    item{
+                        Text(modifier = Modifier.fillMaxWidth(),
+                            text = "CHOOSE A FOLDER", style = TextStyle(
+                                fontFamily = NRegular,
+                                fontSize = 18.sp,
+                                color = Color(0xFFDEDEDE),
+                                textAlign = TextAlign.Center,
+                            ))
+                        Spacer(modifier = Modifier.height(30.dp))
+                    }
+                    item {
+                        FolderWidget(
+                            folderViewModel = folderViewModel,
+                            navController = navController,
+                            isNotePageDialog = true,
+                            onFolderSelectedWithSelectedFolders = ::updateFolderForSelectedFiles,
+                            isSelectedFiles = isSelectedFilesInFolder
+                        )
+                    }
+                }
+                FloatingActionButton(
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                    onClick = {
+                        showDialogForNewFolderWithSelected.value=true
+                    },
+                    containerColor = Color(0xFFCB070D),
+                    shape = RoundedCornerShape(30.dp),
+                ) {
+                    Icon(
+                        tint = Color(0xFFDADADA),
+                        imageVector = TablerIcons.Plus,
+                        contentDescription = "Add",
+                        modifier = Modifier.size(25.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    //for creating a folder
+    val focusRequesterForNewFolder = remember{ FocusRequester() }
+    val tempTitleForNewFolder= remember { mutableStateOf("") }
+
+    if (showDialogForNewFolderWithSelected.value) {
+        LaunchedEffect(Unit) {
+            focusRequesterForNewFolder.requestFocus()
+            keyboardController?.show()
+        }
+        Dialog(onDismissRequest = {
+            showDialogForNewFolderWithSelected.value = false
+            tempTitleForNewFolder.value=""
+        }) {
+            Box(
+                modifier = Modifier
+                    .width(600.dp) // You can control width here!
+                    .wrapContentHeight()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFA131313))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "ADD A FOLDER", style = TextStyle(
+                        fontFamily = NRegular,
+                        fontSize = 18.sp,
+                        color = Color(0xFFDEDEDE)
+                    ))
+                    Spacer(modifier = Modifier.height(30.dp))
+                    BasicTextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp)
+                            .focusRequester(focusRequesterForNewFolder),
+                        value = tempTitleForNewFolder.value,
+                        onValueChange = { tempTitleForNewFolder.value = it },
+                        textStyle = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 20.sp,
+                            color = Color.White,
+                        ),
+                        decorationBox = { innerTextField ->
+                            if(tempTitleForNewFolder.value.isEmpty()){
+                                Text(
+                                    text = "Folder Name",
+                                    style = TextStyle(
+                                        fontFamily = NRegular,
+                                        fontSize = 20.sp,
+                                        color = Color(0xFF8C8C8C)
+                                    )
+                                )
+                            }
+                            innerTextField()
+                        },
+                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
+                        singleLine = true,
+                        cursorBrush = SolidColor(Color.White),
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(
+                        modifier = Modifier
+                            .padding(10.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(50.dp)),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color(0xFFCB070D)
+                        ),
+                        onClick = {
+                            val newFolder = FolderModel(title = tempTitleForNewFolder.value, createdAt = System.currentTimeMillis())
+                            folderViewModel.insertFolder(newFolder)
+                            showDialogForNewFolderWithSelected.value=false
+                            tempTitleForNewFolder.value=""
+                        }) {
+                        Text(modifier = Modifier.padding(vertical = 5.dp), text = "ADD FOLDER", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        ))
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    TextButton(
+                        onClick = {
+                            showDialogForNewFolderWithSelected.value = false
+                            tempTitleForNewFolder.value=""
+                        },
+                        border = BorderStroke(0.dp, Color.Transparent),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color.Transparent
+                        )) {
+                        Text(text = "CANCEL", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color(0xFFB6B6B6),
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
+
+    val showDialogForPrivateFilesWithSelected = remember{mutableStateOf(false)}
+
+    val lock=lockViewModel.lock
+
+    val showDialogForPrivateSetup=remember{mutableStateOf(false)}
+    if (showDialogForPrivateSetup.value) {
+        Dialog(onDismissRequest = {
+            showDialogForPrivateSetup.value = false
+        }) {
+            Box(
+                modifier = Modifier
+                    .width(600.dp) // You can control width here!
+                    .wrapContentHeight()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFA131313))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "Private Files", style = TextStyle(
+                        fontFamily = NRegular,
+                        fontSize = 18.sp,
+                        color = Color(0xFFDEDEDE)
+                    ))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(textAlign = TextAlign.Center,
+                        text = "Private Files Hasn't Set Up", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color(0xFFB6B6B6)
+                        ))
+                    Spacer(modifier = Modifier.height(30.dp))
+                    Button(
+                        modifier = Modifier
+                            .padding(10.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(50.dp)),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color(0xFFCB070D)
+                        ),
+                        onClick = {
+                            showDialogForPrivateSetup.value=false
+                            navController.navigate("private_lock_setup_page")
+                        }) {
+                        Text(modifier = Modifier.padding(vertical = 5.dp), text = "SET PRIVATE FILES", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        ))
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    TextButton(
+                        onClick = {
+                            showDialogForPrivateSetup.value = false
+                        },
+                        border = BorderStroke(0.dp, Color.Transparent),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color.Transparent
+                        )) {
+                        Text(text = "CANCEL", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color(0xFFB6B6B6),
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
+    if(showDialogForPrivateFilesWithSelected.value){
+        Dialog(onDismissRequest = {
+            showDialogForPrivateFilesWithSelected.value = false
+        }) {
+            Box(
+                modifier = Modifier
+                    .width(600.dp) // You can control width here!
+                    .wrapContentHeight()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFA131313))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "LOCK NOTES", style = TextStyle(
+                        fontFamily = NRegular,
+                        fontSize = 18.sp,
+                        color = Color(0xFFDEDEDE)
+                    ))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(textAlign = TextAlign.Center,
+                        text = "Are You Sure To Move Notes To Private Files", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color(0xFFB6B6B6)
+                        ))
+                    Spacer(modifier = Modifier.height(30.dp))
+                    Button(
+                        modifier = Modifier
+                            .padding(10.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(50.dp)),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color(0xFFCB070D)
+                        ),
+                        onClick = {
+                            if(lock.value==null){
+                                showDialogForPrivateFilesWithSelected.value=false
+                                showDialogForPrivateSetup.value=true
+                            }
+                            else{
+                                coroutineScope.launch {
+                                    selectedFilesListInFolder.forEach { note->
+                                        val updatedNote = note.copy(
+                                            isPrivate = true,
+                                        )
+                                        noteViewModel.updateNote(updatedNote) //awaits
+                                    }
+                                    Toast.makeText(context,"Notes Moved to Private Files", Toast.LENGTH_SHORT).show()
+                                    selectedFilesListInFolder.clear()
+                                    showDialogForPrivateFilesWithSelected.value=false
+                                }
+                            }
+                        }) {
+                        Text(modifier = Modifier.padding(vertical = 5.dp), text = "LOCK", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        ))
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    TextButton(
+                        onClick = {
+                            showDialogForPrivateFilesWithSelected.value = false
+                        },
+                        border = BorderStroke(0.dp, Color.Transparent),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color.Transparent
+                        )) {
+                        Text(text = "CANCEL", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color(0xFFB6B6B6),
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
+
+
+    val showDialogForDeleteWithSelected = remember{mutableStateOf(false)}
+    if(showDialogForDeleteWithSelected.value){
+        Dialog(onDismissRequest = {
+            showDialogForDeleteWithSelected.value = false
+        }) {
+            Box(
+                modifier = Modifier
+                    .width(600.dp) // You can control width here!
+                    .wrapContentHeight()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFA131313))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "DELETE NOTE", style = TextStyle(
+                        fontFamily = NRegular,
+                        fontSize = 18.sp,
+                        color = Color(0xFFDEDEDE)
+                    ))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(textAlign = TextAlign.Center,
+                        text = "Are You Sure To Delete Selected Notes", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color(0xFFB6B6B6)
+                        ))
+                    Spacer(modifier = Modifier.height(30.dp))
+                    Button(
+                        modifier = Modifier
+                            .padding(10.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(50.dp)),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color(0xFFCB070D)
+                        ),
+                        onClick = {
+                            coroutineScope.launch{
+                                selectedFilesListInFolder.forEach { note->
+                                    noteBlockViewModel.deleteBlocksByNoteId(note.id)//awaits
+                                    noteViewModel.deleteNote(note)//awaits
+                                }
+                                Toast.makeText(context,"Notes Deleted", Toast.LENGTH_SHORT).show()
+                                selectedFilesListInFolder.clear()
+                                showDialogForDeleteWithSelected.value=false
+                            }
+                        }) {
+                        Text(modifier = Modifier.padding(vertical = 5.dp), text = "DELETE", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        ))
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    TextButton(
+                        onClick = {
+                            showDialogForDeleteWithSelected.value = false
+                        },
+                        border = BorderStroke(0.dp, Color.Transparent),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color.Transparent
+                        )) {
+                        Text(text = "CANCEL", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color(0xFFB6B6B6),
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
+    //=========================================Select operations for note widget==============================================
 
     Scaffold(
         containerColor = Color.Black,
@@ -371,6 +799,26 @@ fun FolderPage(folderId:Long,navController: NavController, folderViewModel: Fold
                                 DropdownMenuItem(
                                     onClick = {
                                         expandedSettings.value = false
+                                        isSelectedFilesInFolder.value=true
+                                    },
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                tint = Color.White,
+                                                imageVector = TablerIcons.CircleCheck,
+                                                contentDescription = "Select",
+                                            )
+                                            Text(
+                                                text = if(isSelectedFilesInFolder.value) "Done" else "Select",
+                                                modifier = Modifier.padding(start = 15.dp)
+                                            )
+                                        }
+                                    }
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                DropdownMenuItem(
+                                    onClick = {
+                                        expandedSettings.value = false
                                         showDialogForFolderUpdate.value=true
                                     },
                                     text = {
@@ -415,7 +863,58 @@ fun FolderPage(folderId:Long,navController: NavController, folderViewModel: Fold
             )
         },
         floatingActionButton = {
-            if(!deleteWithFilesRequest.value){
+            if(isSelectedFilesInFolder.value){
+                FloatingActionButton(
+                    onClick = {},
+                    containerColor = Color(0xDA19181E),
+                    shape = RoundedCornerShape(30.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.CenterVertically
+                    ){
+                        Image(
+                            painter = painterResource(id= R.drawable.folder_add),
+                            contentDescription = "Folder add",
+                            modifier = Modifier
+                                .requiredSize(30.dp)
+                                .padding(start = 1.dp).clickable(
+                                    onClick = {
+                                        showDialogForAddFolderWithSelected.value=true
+                                    }
+                                ),
+                            colorFilter = ColorFilter.tint(Color.White),
+                            contentScale = ContentScale.Fit
+                        )
+                        Icon(
+                            tint = Color.White,
+                            modifier = Modifier
+                                .requiredSize(30.dp)
+                                .padding(start = 1.dp).clickable(
+                                    onClick = {
+                                        showDialogForPrivateFilesWithSelected.value=true
+                                    }
+                                ),
+                            imageVector = TablerIcons.Lock,
+                            contentDescription = "Lock note"
+                        )
+                        Icon(
+                            tint = Color.Red,
+                            modifier = Modifier
+                                .requiredSize(30.dp)
+                                .padding(start = 1.dp).clickable(
+                                    onClick = {
+                                        showDialogForDeleteWithSelected.value=true
+                                    }
+                                ),
+                            imageVector = TablerIcons.Trash,
+                            contentDescription = "Delete"
+                        )
+                    }
+                }
+            }
+            else if(!deleteWithFilesRequest.value){
                 Box(modifier = Modifier.padding(20.dp)) {
                     FloatingActionButton(
                         onClick = {

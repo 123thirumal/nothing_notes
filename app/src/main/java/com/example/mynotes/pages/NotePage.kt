@@ -1,10 +1,11 @@
 package com.example.mynotes.pages
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -49,23 +50,31 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.ButtonDefaults
 import androidx.compose.material.Button
 import androidx.compose.material.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.focus.FocusRequester
@@ -73,16 +82,18 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import androidx.navigation.NavController
-import coil3.compose.AsyncImage
-import coil3.gif.GifDecoder
-import coil3.request.ImageRequest
 import com.example.mynotes.R
 import com.example.mynotes.data.viewmodel.FolderViewModel
 import com.example.mynotes.data.viewmodel.ImageDemoViewModel
@@ -96,18 +107,18 @@ import com.example.mynotes.model.CheckListModel
 import com.example.mynotes.model.FolderModel
 import com.example.mynotes.model.ListModel
 import com.example.mynotes.model.NoteBlockEntityModel
-import com.example.mynotes.model.NoteBlockModel
+import com.example.mynotes.ui.theme.NDot55
+import com.example.mynotes.utils.AudioRecorderManager
 import com.example.mynotes.utils.convertToNoteBlockEntityModel
 import com.example.mynotes.utils.convertToNoteBlockModel
 import com.example.mynotes.widgets.FolderWidget
 import com.example.mynotes.widgets.noteblockwidgets.PhotoWidget
 import com.example.mynotes.widgets.noteblockwidgets.TextWidget
+import com.example.mynotes.widgets.noteblockwidgets.VoiceWidget
 import com.example.mynotes.widgets.noteblockwidgets.list.BulletedListWidget
 import com.example.mynotes.widgets.noteblockwidgets.list.CheckListWidget
 import com.example.mynotes.widgets.noteblockwidgets.list.NumberedListWidget
 import compose.icons.TablerIcons
-import compose.icons.tablericons.ArrowBackUp
-import compose.icons.tablericons.ArrowForwardUp
 import compose.icons.tablericons.ArrowLeft
 import compose.icons.tablericons.Camera
 import compose.icons.tablericons.FolderOff
@@ -115,17 +126,24 @@ import compose.icons.tablericons.List
 import compose.icons.tablericons.ListCheck
 import compose.icons.tablericons.Lock
 import compose.icons.tablericons.LockOpen
+import compose.icons.tablericons.Microphone
 import compose.icons.tablericons.Photo
+import compose.icons.tablericons.PlayerPause
+import compose.icons.tablericons.PlayerPlay
 import compose.icons.tablericons.Plus
+import compose.icons.tablericons.Refresh
 import compose.icons.tablericons.Settings
 import compose.icons.tablericons.Trash
+import compose.icons.tablericons.X
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
 @Composable
 fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, noteViewModel: NoteViewModel, newNote: Boolean, noteId: Long=-1L, navController: NavController, folderId:Long=-1L,
              isPrivate: Boolean=false, noteBlockViewModel: NoteBlockViewModel,
-             imageDemoViewModel: ImageDemoViewModel) { //isPrivate for creating new note in private files
+             imageDemoViewModel: ImageDemoViewModel,//isPrivate for creating new note in private files
+             ) {
 
 
     val isChangeMade = remember{mutableStateOf(false)}
@@ -192,43 +210,6 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
 
 
     val context = LocalContext.current
-
-    //to wait for save
-    val isSavePress=remember{mutableStateOf(false)}
-    val isLockPress=remember{mutableStateOf(false)}
-    val isFolderUpdate=remember{mutableStateOf(false)}
-    val isFolderRemove=remember{mutableStateOf(false)}
-    val isUpdateDone = noteViewModel.isUpdateDone
-    LaunchedEffect(isUpdateDone.value){
-        if(isUpdateDone.value&&isSavePress.value){
-            Toast.makeText(context, "Note Saved", Toast.LENGTH_SHORT).show()
-            isSavePress.value=false
-            isChangeMade.value=false
-            noteViewModel.setIsUpdateDone(bool = false)
-
-            navController.popBackStack()
-        }
-        else if(isUpdateDone.value&&isLockPress.value){
-            if(isCardLocked.value){
-                Toast.makeText(context, "Note Moved To Private Files", Toast.LENGTH_SHORT).show()
-            }
-            else{
-                Toast.makeText(context, "Note Moved To Public Files", Toast.LENGTH_SHORT).show()
-            }
-            isLockPress.value=false
-            noteViewModel.setIsUpdateDone(bool = false)
-        }
-        else if(isUpdateDone.value&&isFolderUpdate.value){
-            Toast.makeText(context, "Moved To Folder", Toast.LENGTH_SHORT).show()
-            isFolderUpdate.value=false
-            noteViewModel.setIsUpdateDone(bool = false)
-        }
-        else if(isUpdateDone.value&&isFolderRemove.value){
-            Toast.makeText(context, "Removed From Folder", Toast.LENGTH_SHORT).show()
-            isFolderRemove.value=false
-            noteViewModel.setIsUpdateDone(bool = false)
-        }
-    }
 
 
     var expandedList by remember { mutableStateOf(false) }
@@ -435,7 +416,6 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
 
     fun updateFolder(folderId: Long){
         coroutineScope.launch {
-            isFolderUpdate.value = true
 
             val updatedNote = currentNote.value!!.copy(
                 folderId = folderId
@@ -445,6 +425,7 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
             //Toast.makeText(context, "Moved To Folder", Toast.LENGTH_SHORT).show()
             currentNote.value = updatedNote
             showDialogForAddFolder.value = false
+            Toast.makeText(context, "Moved To Folder", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -630,11 +611,11 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                     )
                     noteBlockViewModel.insertNoteBlock(convertedBlock)
                 }
-
-                isSavePress.value = true
+                Toast.makeText(context, "Note Saved", Toast.LENGTH_SHORT).show()
                 isChangeMade.value = false
+                navController.popBackStack()
+
             }
-            navController.popBackStack()
         }
     }
 
@@ -685,9 +666,8 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                             backgroundColor = Color(0xFFCB070D)
                         ),
                         onClick = {
-                            saveNote()
-                            isChangeMade.value=false
                             showDialogWhenNotSaved.value=false
+                            saveNote()
                         }) {
                         Text(modifier = Modifier.padding(vertical = 5.dp), text = "SAVE NOTE", style = TextStyle(
                             fontFamily = NRegular,
@@ -720,6 +700,470 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
 
 
 
+//================================================dialog for voice note=================================================//
+
+
+    val voiceNoteUri = remember{mutableStateOf<Uri?>(null)}
+    val isShowDialogForVoiceNote = remember{ mutableStateOf(false) }
+    val audioRecorderManager = remember { AudioRecorderManager(context) }
+    val amplitude = audioRecorderManager.amplitudeFlow.collectAsState()
+    val isStartRecording = remember{mutableStateOf(false)}
+    val isPlayRecording = remember{mutableStateOf(false)}
+    val showDialogForDiscardRecording = remember { mutableStateOf(false) }
+    val isPermissionGrantedForRecording = remember { mutableStateOf(false) }
+
+    val waveformBars = remember { mutableStateListOf<Float>() }
+    val tempBarList = remember { mutableStateListOf<Float>() }
+
+    LaunchedEffect(amplitude.value) {
+        waveformBars.add(amplitude.value)
+        tempBarList.add(amplitude.value)
+        if(tempBarList.size>35){
+            tempBarList.removeAt(0)
+        }
+    }
+
+    val timerSec = remember { mutableLongStateOf(0) }
+
+    LaunchedEffect(isPlayRecording.value,isPermissionGrantedForRecording.value) {
+        if (isPlayRecording.value&&isPermissionGrantedForRecording.value) {
+            while (isPlayRecording.value) {
+                // Update timer text
+                ++timerSec.longValue
+                delay(1000L) // wait 1 second
+            }
+        }
+    }
+
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { granted ->
+            if (granted) {
+                // Only start recording if permission granted
+                isPermissionGrantedForRecording.value=true
+                isPlayRecording.value = true
+            } else {
+                Toast.makeText(context, "Microphone permission denied", Toast.LENGTH_SHORT).show()
+            }
+        }
+    )
+
+    LaunchedEffect(isStartRecording.value, isPlayRecording.value) {
+        if (isStartRecording.value && isPlayRecording.value) {
+            //check for permission
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+            ){
+                isPermissionGrantedForRecording.value=true
+                audioRecorderManager.startRecording()
+            }
+            else{
+                // Request permission
+                audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        } else {
+            audioRecorderManager.stopRecording()
+        }
+    }
+
+    if (showDialogForDiscardRecording.value) {
+        Dialog(onDismissRequest = {
+            showDialogForDiscardRecording.value = false
+        }) {
+            Box(
+                modifier = Modifier
+                    .width(600.dp) // You can control width here!
+                    .wrapContentHeight()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFA131313))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "DISCARD RECORDING", style = TextStyle(
+                        fontFamily = NRegular,
+                        fontSize = 18.sp,
+                        color = Color(0xFFDEDEDE)
+                    ))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(textAlign = TextAlign.Center,
+                        text = "This recording isn't saved", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color(0xFFB6B6B6)
+                        ))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        modifier = Modifier.padding(10.dp).fillMaxWidth()
+                            .clip(RoundedCornerShape(50.dp)),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color(0xFFCB070D)
+                        ),
+                        onClick = {
+                            isStartRecording.value=false
+                            isPlayRecording.value=false
+                            timerSec.longValue=0
+                            waveformBars.clear()
+                            tempBarList.clear()
+                            showDialogForDiscardRecording.value = false
+                            isShowDialogForVoiceNote.value=false
+                        }) {
+                        Text(modifier = Modifier.padding(vertical = 5.dp), text = "DISCARD", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        ))
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    TextButton(onClick = {
+                        showDialogForDiscardRecording.value = false },
+                        border = BorderStroke(0.dp, Color.Transparent),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color.Transparent
+                        )) {
+                        Text(text = "KEEP RECORDING", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color(0xFFB6B6B6),
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
+    val showDialogForResetRecording = remember { mutableStateOf(false) }
+
+    if (showDialogForResetRecording.value) {
+        Dialog(onDismissRequest = {
+            showDialogForResetRecording.value = false
+        }) {
+            Box(
+                modifier = Modifier
+                    .width(600.dp) // You can control width here!
+                    .wrapContentHeight()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFA131313))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "RESET RECORDING", style = TextStyle(
+                        fontFamily = NRegular,
+                        fontSize = 18.sp,
+                        color = Color(0xFFDEDEDE)
+                    ))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(textAlign = TextAlign.Center,
+                        text = "This recording isn't saved", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color(0xFFB6B6B6)
+                        ))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        modifier = Modifier.padding(10.dp).fillMaxWidth()
+                            .clip(RoundedCornerShape(50.dp)),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color(0xFFCB070D)
+                        ),
+                        onClick = {
+                            isStartRecording.value=false
+                            isPlayRecording.value=false
+                            timerSec.longValue=0
+                            waveformBars.clear()
+                            tempBarList.clear()
+                            showDialogForResetRecording.value = false
+                        }) {
+                        Text(modifier = Modifier.padding(vertical = 5.dp), text = "RESET", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        ))
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    TextButton(onClick = {
+                        showDialogForResetRecording.value = false },
+                        border = BorderStroke(0.dp, Color.Transparent),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color.Transparent
+                        )) {
+                        Text(text = "KEEP RECORDING", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color(0xFFB6B6B6),
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
+    if(isShowDialogForVoiceNote.value){
+        Dialog(
+            onDismissRequest = {
+                if(timerSec.longValue>0){
+                    showDialogForDiscardRecording.value=true
+                }
+                else{
+                    isShowDialogForVoiceNote.value=false
+                }
+            },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize(0.95f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFA131313))
+                    .padding(5.dp),
+                contentAlignment = Alignment.TopStart
+            ){
+                Column(modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState())
+                    .padding(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Top
+                ) {
+                    Row(modifier = Modifier.fillMaxWidth().weight(0.1f),
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
+                    ){
+                        IconButton(onClick = {
+                            if(timerSec.longValue>0){
+                                showDialogForDiscardRecording.value=true
+                            }
+                            else{
+                                isShowDialogForVoiceNote.value=false
+                            }
+                        }) {
+                            Icon(
+                                imageVector = TablerIcons.X,
+                                contentDescription = "back",
+                                tint = Color.White,
+                                modifier = Modifier.size(23.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "VoiceNote",
+                            style = TextStyle(fontFamily = NDot, fontSize = 30.sp, color = Color.White, fontWeight = FontWeight.Normal)
+
+                        )
+
+                    }
+                    Spacer( modifier = Modifier.height(80.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth().weight(0.9f),
+                        verticalArrangement = Arrangement.SpaceEvenly,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ){
+                        // Timer
+                        Text(
+                            text = buildAnnotatedString {
+                                // Hours part
+                                withStyle(style = SpanStyle(fontFamily = NDot)) {
+                                    append((timerSec.longValue / 3600).toString().padStart(2, '0'))
+                                }
+                                withStyle(style = SpanStyle(fontFamily = NDot55)) {
+                                    append(" : ")
+                                }
+                                // Minutes part
+                                withStyle(style = SpanStyle(fontFamily = NDot)) {
+                                    append(((timerSec.longValue % 3600) / 60).toString().padStart(2, '0'))
+                                }
+                                withStyle(style = SpanStyle(fontFamily = NDot55)) {
+                                    append(" : ")
+                                }
+                                // Seconds part
+                                withStyle(style = SpanStyle(fontFamily = NDot)) {
+                                    append((timerSec.longValue % 60).toString().padStart(2, '0'))
+                                }
+                            },
+                            color = Color(0xFFD7D7D7),
+                            fontSize = 55.sp
+                        )
+
+                        // Simulated waveform
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight(),
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(tint = Color.Red, imageVector = Icons.Default.ArrowDropDown, contentDescription = "Pointer",
+                                    modifier = Modifier.size(40.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Past bars (left of pointer)
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        horizontalArrangement = Arrangement.End,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        tempBarList.forEach { heightFactor ->
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(5.dp)
+                                                    .padding(horizontal = 2.dp)
+                                                    .fillMaxHeight(heightFactor.coerceIn(0.1f, 0.6f))
+                                                    .background(
+                                                        if (isPlayRecording.value) Color.Red else Color.White,
+                                                        RoundedCornerShape(2.dp)
+                                                    )
+                                            )
+                                        }
+                                    }
+
+                                    // Center pointer
+                                    Box(
+                                        modifier = Modifier
+                                            .width(2.1.dp)
+                                            .fillMaxHeight(0.8f)
+                                            .background(Color.Red) // or any highlight color
+                                    )
+
+                                    // Future bars (right of pointer - new ones)
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        horizontalArrangement = Arrangement.Start
+                                    ) {
+                                        // Only show new bars that arrived after centerIndex if needed
+                                        // Here, we continue the center as a live point, so we don’t draw future
+                                    }
+                                }
+                            }
+                        }
+
+                        //Buttons
+                        Row(modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceEvenly){
+
+                            if(!isStartRecording.value){
+                                Button(onClick = {
+                                    isStartRecording.value=true
+                                    isPlayRecording.value=true
+                                    timerSec.longValue=0
+                                },
+                                    colors = ButtonDefaults.buttonColors(
+                                        backgroundColor = Color(0xFFCB070D)
+                                    )  ,
+                                    modifier = Modifier.clip(RoundedCornerShape(50.dp))
+                                ) {
+                                    Text(
+                                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp),
+                                        text = "RECORD",
+                                        style = TextStyle(
+                                            fontFamily = NRegular,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                        )
+                                    )
+                                }
+                            } else if(isStartRecording.value&&isPlayRecording.value){
+                                IconButton(
+                                    onClick = {
+                                        isPlayRecording.value=false
+                                    },
+                                    modifier = Modifier
+                                        .size(60.dp)
+                                        .clip(RoundedCornerShape(50.dp))
+                                        .background(Color(0xFFD7D7D7))) {
+                                    Icon(
+                                        imageVector = TablerIcons.PlayerPause,
+                                        contentDescription = "Pause",
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(35.dp)
+                                    )
+                                }
+                            } else if(isStartRecording.value&&!isPlayRecording.value){
+                                IconButton(
+                                    onClick = {
+                                        showDialogForResetRecording.value=true
+                                    },
+                                    modifier = Modifier
+                                        .size(60.dp)
+                                        .clip(RoundedCornerShape(50.dp))
+                                        .background(Color(0xFFD7D7D7))){
+                                    Icon(
+                                        imageVector = TablerIcons.Refresh,
+                                        contentDescription = "Re-record",
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(35.dp)
+                                    )
+                                }
+                                IconButton(onClick = {isPlayRecording.value=true},
+                                    modifier = Modifier
+                                        .size(60.dp)
+                                        .clip(RoundedCornerShape(50.dp))
+                                        .background(Color(0xFFD7D7D7))){
+                                    Icon(
+                                        imageVector = TablerIcons.PlayerPlay,
+                                        contentDescription = "Play",
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(35.dp)
+                                    )
+                                }
+                                Button(onClick = {
+                                    voiceNoteUri.value= audioRecorderManager.getOutputFilePath().toString().toUri()
+                                    val last = noteBlockEntityList.lastOrNull()
+                                    if (last is NoteBlockEntityModel.TextBlock && last.description.value.trim().isBlank()) {
+                                        noteBlockEntityList.removeAt(noteBlockEntityList.size - 1)
+                                    }
+                                    val tempVoiceNote = mutableStateOf(voiceNoteUri.value)
+                                    noteBlockEntityList.add(NoteBlockEntityModel.VoiceBlock(uri = tempVoiceNote))
+                                    noteBlockEntityList.add(NoteBlockEntityModel.TextBlock(description = mutableStateOf("")))
+                                    isChangeMade.value=true
+
+                                    voiceNoteUri.value=null
+                                    isStartRecording.value=false
+                                    isPlayRecording.value=false
+                                    timerSec.longValue=0
+                                    waveformBars.clear()
+                                    tempBarList.clear()
+                                    isShowDialogForVoiceNote.value=false
+
+                                },
+                                    colors = ButtonDefaults.buttonColors(
+                                        backgroundColor = Color(0xFFCB070D)
+                                    )  ,
+                                    modifier = Modifier.clip(RoundedCornerShape(50.dp))
+                                ) {
+                                    Text(
+                                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp),
+                                        text = "SAVE",
+                                        style = TextStyle(
+                                            fontFamily = NRegular,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
 
 
@@ -862,7 +1306,7 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                                                 )
                                                 noteViewModel.updateNote(updatedNote)
                                                 currentNote.value=updatedNote
-                                                isFolderRemove.value=true
+                                                Toast.makeText(context, "Removed From Folder", Toast.LENGTH_SHORT).show()
                                             }
                                         },
                                         text = {
@@ -894,9 +1338,14 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                                                     isPrivate = !currentNote.value!!.isPrivate,
                                                 )
                                                 isCardLocked.value=updatedNote.isPrivate
-                                                isLockPress.value=true
                                                 currentNote.value = updatedNote
                                                 noteViewModel.updateNote(updatedNote) //awaits
+                                                if(isCardLocked.value){
+                                                    Toast.makeText(context, "Note Moved To Private Files", Toast.LENGTH_SHORT).show()
+                                                }
+                                                else{
+                                                    Toast.makeText(context, "Note Moved To Public Files", Toast.LENGTH_SHORT).show()
+                                                }
                                             }
                                         }
                                     },
@@ -1075,12 +1524,17 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                                         )
                                     }
                                 }
-//                            IconButton(onClick = {navController.navigate("recording_page")},modifier = Modifier.padding(horizontal = 10.dp)) {
-//                                Icon(imageVector = TablerIcons.Microphone,
-//                                    contentDescription = "Microphone",
-//                                    tint = Color.White,
-//                                    modifier = Modifier.size(23.dp))
-//                            }
+
+                                IconButton(
+                                    onClick = {
+                                        isShowDialogForVoiceNote.value=true;
+                                    },
+                                    modifier = Modifier.padding(horizontal = 10.dp)) {
+                                    Icon(imageVector = TablerIcons.Microphone,
+                                        contentDescription = "Microphone",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(23.dp))
+                                }
                             }
                         }
                         Box{
@@ -1197,7 +1651,16 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                                     BulletedListWidget(block, isChangeMade = isChangeMade)
                                 }
                             }
-//                        is NoteBlockModel.VoiceBlock -> VoiceWidget()
+
+
+                            is NoteBlockEntityModel.VoiceBlock -> {
+                                VoiceWidget(
+                                    voiceBlock = block,
+                                    uri = block.uri.value!!,
+                                    noteBlockEntityList = noteBlockEntityList,
+                                    isChangeMade = isChangeMade
+                                )
+                            }
                         }
                     }
                 }

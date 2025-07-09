@@ -16,6 +16,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.savedstate.savedState
 import com.example.mynotes.data.viewmodel.CommonViewModel
 import com.example.mynotes.pages.FolderPage
 import com.example.mynotes.pages.NotePage
@@ -47,17 +48,6 @@ fun Navigation(navController: NavHostController = rememberNavController()) {
 
 
 
-        composable(
-            route = "recording_page",
-            enterTransition = { slideInHorizontally(initialOffsetX = { it },animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)) },  // slide in from right
-            exitTransition = { slideOutHorizontally(targetOffsetX = { -it },animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)) },  // slide out to left when going to another screen
-            popEnterTransition = { slideInHorizontally(initialOffsetX = { -it },animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)) }, // slide in from left when coming back
-            popExitTransition = { slideOutHorizontally(targetOffsetX = { it },animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)) },   // slide out to right when going back
-        ) {
-            RecordingPage(navController = navController)
-        }
-
-
 
         composable(//note page
             route = "card_page/{cardId}/{folderId}/{isPrivate}",
@@ -83,22 +73,22 @@ fun Navigation(navController: NavHostController = rememberNavController()) {
             if(cardId ==-1L && folderId==-1L&& !isPrivate){ //creating new note in ALL
                 NotePage(lockViewModel = commonViewModel.lockViewModel, noteViewModel = commonViewModel.noteViewModel, newNote = true,navController=navController,
                     folderViewModel = commonViewModel.folderViewModel, noteBlockViewModel = commonViewModel.noteBlockViewModel,
-                    imageDemoViewModel = commonViewModel.imageDemoViewModel)
+                    imageDemoViewModel = commonViewModel.imageDemoViewModel,)
             }
             else if(cardId==-1L&&!isPrivate) { //creating new note in a folder
                 NotePage(lockViewModel = commonViewModel.lockViewModel,noteViewModel = commonViewModel.noteViewModel, newNote = true,folderId = folderId,navController=navController,
                     folderViewModel = commonViewModel.folderViewModel,noteBlockViewModel = commonViewModel.noteBlockViewModel,
-                    imageDemoViewModel = commonViewModel.imageDemoViewModel)
+                    imageDemoViewModel = commonViewModel.imageDemoViewModel,)
             }
             else if(cardId==-1L&&isPrivate) { //creating new in  private files
                 NotePage(lockViewModel = commonViewModel.lockViewModel,noteViewModel = commonViewModel.noteViewModel, newNote = true, isPrivate = true,navController=navController,
                     folderViewModel = commonViewModel.folderViewModel,noteBlockViewModel = commonViewModel.noteBlockViewModel,
-                    imageDemoViewModel = commonViewModel.imageDemoViewModel)
+                    imageDemoViewModel = commonViewModel.imageDemoViewModel, )
             }
             else{ //open existing note
                 NotePage(lockViewModel = commonViewModel.lockViewModel,noteViewModel = commonViewModel.noteViewModel, newNote = false,noteId=cardId,navController=navController,
                     folderViewModel = commonViewModel.folderViewModel,noteBlockViewModel = commonViewModel.noteBlockViewModel,
-                    imageDemoViewModel = commonViewModel.imageDemoViewModel)
+                    imageDemoViewModel = commonViewModel.imageDemoViewModel,)
             }
         }
 
@@ -118,7 +108,7 @@ fun Navigation(navController: NavHostController = rememberNavController()) {
         ) { backStackEntry ->
             val folderId = backStackEntry.arguments?.getLong("folderId") ?: -1L
             FolderPage(folderId= folderId,navController=navController, noteViewModel = commonViewModel.noteViewModel,
-                folderViewModel = commonViewModel.folderViewModel)
+                folderViewModel = commonViewModel.folderViewModel, lockViewModel = commonViewModel.lockViewModel, noteBlockViewModel = commonViewModel.noteBlockViewModel)
         }
 
 

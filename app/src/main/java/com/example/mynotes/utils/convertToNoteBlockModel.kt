@@ -59,5 +59,14 @@ fun convertToNoteBlockModel(
                 blockOrder = order
             )
         }
+
+        is NoteBlockEntityModel.VoiceBlock -> {
+            return NoteBlockModel(
+                noteId = noteId,
+                type = "voice_note",
+                audioPath = block.uri.value?.toString(),
+                blockOrder = order
+            )
+        }
     }
 }

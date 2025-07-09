@@ -1,6 +1,7 @@
 package com.example.mynotes.utils
 
 import android.Manifest
+import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -8,61 +9,60 @@ import androidx.annotation.RequiresPermission
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
 import kotlin.math.abs
 
-class AudioRecorderManager {
-    private var audioRecord: AudioRecord? = null;
-    private var recordingJob: Job? = null
-    private val sampleRate = 44100
-    private val bufferSize = AudioRecord.getMinBufferSize(
-        sampleRate,
-        AudioFormat.CHANNEL_IN_MONO,
-        AudioFormat.ENCODING_PCM_16BIT
-    )
-
+class AudioRecorderManager(private val context: Context) {
+    private var recorder: MediaRecorder? = null
+    private var outputFile: File? = null
+    private var amplitudeJob: Job? = null
 
     private val _amplitudeFlow = MutableStateFlow(0f)
     val amplitudeFlow: StateFlow<Float> = _amplitudeFlow
 
-    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     fun startRecording() {
-        if (audioRecord != null) return // already running
+        val dir = File(context.filesDir, "audio_recordings")
+        dir.mkdirs()
+        outputFile = File(dir, "${System.currentTimeMillis()}.m4a")
 
-        audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            sampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            bufferSize
-        )
+        recorder = MediaRecorder().apply {
+            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            setOutputFile(outputFile!!.absolutePath)
+            prepare()
+            start()
+        }
 
-
-        audioRecord?.startRecording() //to start recording
-
-        recordingJob = CoroutineScope(Dispatchers.IO).launch {
-            val buffer = ShortArray(bufferSize)
+        // Launch amplitude tracking
+        amplitudeJob = CoroutineScope(Dispatchers.IO).launch {
             while (isActive) {
-                val readSize = audioRecord?.read(buffer, 0, buffer.size) ?: 0
-                if (readSize > 0) {
-                    val maxAmplitude = buffer.take(readSize).maxOf { abs(it.toInt()) }
-                    // Normalize amplitude to 0f .. 1f
-                    _amplitudeFlow.value = maxAmplitude / 32767f
+                delay(100L) // update every 100ms
+                try {
+                    val amp = recorder?.maxAmplitude ?: 0
+                    _amplitudeFlow.value = amp / 32767f
+                } catch (_: Exception) {
+                    _amplitudeFlow.value = 0f
                 }
             }
         }
     }
 
     fun stopRecording() {
-        if (audioRecord == null) return
+        amplitudeJob?.cancel()
+        amplitudeJob = null
 
-        recordingJob?.cancel()
-        recordingJob = null
-        audioRecord?.stop()
-        audioRecord?.release()
-        audioRecord = null
+        recorder?.apply {
+            stop()
+            release()
+        }
+        recorder = null
     }
+
+    fun getOutputFilePath(): String? = outputFile?.absolutePath
 }

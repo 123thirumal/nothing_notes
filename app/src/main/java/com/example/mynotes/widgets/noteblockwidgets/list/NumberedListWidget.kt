@@ -68,6 +68,19 @@ fun NumberedListWidget(numberedListBlock: NoteBlockEntityModel.NumberedListBlock
                         color = Color(0xCBFFFFFF),
                         fontWeight = FontWeight.W100,
                     ),
+                    decorationBox = { innerTextField ->
+                        if (text.value.isEmpty()) {
+                            Text(
+                                text = " ...",
+                                style = TextStyle(
+                                    fontFamily = NRegular,
+                                    fontSize = 16.sp,
+                                    color = Color(0xFF8C8C8C)
+                                )
+                            )
+                        }
+                        innerTextField()
+                    },
                     cursorBrush = SolidColor(Color.White),
                     keyboardOptions = KeyboardOptions.Default.copy(
                         imeAction = ImeAction.Next

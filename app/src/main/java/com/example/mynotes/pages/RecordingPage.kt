@@ -2,6 +2,8 @@ package com.example.mynotes.pages
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -42,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -76,21 +79,18 @@ import compose.icons.tablericons.PlayerPause
 import compose.icons.tablericons.PlayerPlay
 import compose.icons.tablericons.Refresh
 import kotlinx.coroutines.delay
+import androidx.core.net.toUri
 
 @Composable
-fun RecordingPage(navController: NavController){
+fun RecordingPage(navController: NavController, saveVoiceNoteRequest:MutableState<Boolean>, voiceNoteUri:MutableState<Uri?>){
     val context = LocalContext.current
-    val audioRecorderManager = remember { AudioRecorderManager() }
+    val audioRecorderManager = remember { AudioRecorderManager(context) }
     val amplitude = audioRecorderManager.amplitudeFlow.collectAsState()
     val isStart = remember{mutableStateOf(false)}
     val isPlay = remember{mutableStateOf(false)}
     val showDialog = remember { mutableStateOf(false) }
+    val isPermissionGranted = remember { mutableStateOf(false) }
     val isBack = remember { mutableStateOf(false) }
-
-    BackHandler(enabled = true) {
-        showDialog.value = true
-        isBack.value=true
-    }
 
 
     //For waveform
@@ -109,8 +109,8 @@ fun RecordingPage(navController: NavController){
     //for Timer
     val timerSec = remember { mutableLongStateOf(0) }
 
-    LaunchedEffect(isPlay.value) {
-        if (isPlay.value) {
+    LaunchedEffect(isPlay.value,isPermissionGranted.value) {
+        if (isPlay.value&&isPermissionGranted.value) {
             while (isPlay.value) {
                 // Update timer text
                 ++timerSec.longValue
@@ -119,12 +119,22 @@ fun RecordingPage(navController: NavController){
         }
     }
 
+
+    BackHandler(enabled = true) {
+        if(timerSec.longValue>0){
+            showDialog.value=true
+        }
+        else{
+            navController.popBackStack()
+        }
+    }
+
     val audioPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { granted ->
             if (granted) {
                 // Only start recording if permission granted
-                isStart.value = true
+                isPermissionGranted.value=true
                 isPlay.value = true
             } else {
                 Toast.makeText(context, "Microphone permission denied", Toast.LENGTH_SHORT).show()
@@ -140,6 +150,7 @@ fun RecordingPage(navController: NavController){
                     Manifest.permission.RECORD_AUDIO
                 ) == PackageManager.PERMISSION_GRANTED
             ){
+                isPermissionGranted.value=true
                 audioRecorderManager.startRecording()
             }
             else{
@@ -236,8 +247,13 @@ fun RecordingPage(navController: NavController){
                 backgroundColor = Color.Black,
                 navigationIcon = {
                     IconButton(onClick = {
-                        isBack.value=true
-                        showDialog.value=true
+                        if(timerSec.longValue>0){
+                            showDialog.value=true
+                            isBack.value=true
+                        }
+                        else{
+                            navController.popBackStack()
+                        }
                     }) {
                         Icon(
                             imageVector = TablerIcons.ArrowLeft,
@@ -430,7 +446,14 @@ fun RecordingPage(navController: NavController){
                                 modifier = Modifier.size(35.dp)
                             )
                         }
-                        Button(onClick = {},
+                        Button(onClick = {
+                            voiceNoteUri.value= audioRecorderManager.getOutputFilePath().toString().toUri()
+                            Log.d("recording_page",voiceNoteUri.value.toString())
+                            saveVoiceNoteRequest.value=true
+                            isStart.value=false
+                            isPlay.value=false
+                            navController.popBackStack()
+                        },
                             colors = ButtonDefaults.buttonColors(
                                 backgroundColor = Color(0xFFCB070D)
                             )  ,

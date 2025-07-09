@@ -64,16 +64,10 @@ class NoteViewModel( private val noteRepository: NoteRepository= Graph.noteRepos
         return noteRepository.getNoteById(id)
     }
 
-    private val _isUpdateDone = mutableStateOf(false)
-    val isUpdateDone: MutableState<Boolean> = _isUpdateDone
     suspend fun updateNote(note: NoteModel){
         noteRepository.updateNote(note) //awaits
-        _isUpdateDone.value = true
     }
 
-    fun setIsUpdateDone(bool: Boolean){
-        _isUpdateDone.value=bool
-    }
 
 
     suspend fun deleteNote(note: NoteModel){

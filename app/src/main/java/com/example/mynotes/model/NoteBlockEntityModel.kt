@@ -36,7 +36,9 @@ sealed class NoteBlockEntityModel {
     ) : NoteBlockEntityModel()
 
 
-//    data class VoiceBlock(
-//        val uri: String
-//    ) : NoteBlockModel(){}
+    data class VoiceBlock(
+        val uri: MutableState<Uri?>
+    ) : NoteBlockEntityModel(){}
+
+
 }
