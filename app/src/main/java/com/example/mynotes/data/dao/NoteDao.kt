@@ -11,17 +11,17 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface NoteDao{
-    @Insert(onConflict = OnConflictStrategy.IGNORE) //return -1L in case of error
-    suspend fun insertNote(note: NoteModel): Long
+    @Insert(onConflict = OnConflictStrategy.REPLACE) //return -1L in case of error
+    suspend fun insertNote(note: NoteModel)
 
     @Query("SELECT * FROM `notes_table` WHERE folderId =:folderId")
-    fun getNotesByFolderId(folderId: Long): Flow<List<NoteModel>>
+    fun getNotesByFolderId(folderId: String): Flow<List<NoteModel>>
 
     @Query("SELECT * FROM `notes_table`")
     fun getAllNotes(): Flow<List<NoteModel>>
 
     @Query("SELECT * FROM `notes_table` WHERE id =:id")
-    suspend fun getNoteById(id: Long) :NoteModel
+    suspend fun getNoteById(id: String) :NoteModel
 
     @Delete
     suspend fun deleteNote(note: NoteModel)

@@ -48,9 +48,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 
 
 @Composable
-fun FolderWidget(onFolderSelected: ((Long) -> Unit)? = null,isNotePageDialog : Boolean=false,folderViewModel: FolderViewModel,navController: NavController,
+fun FolderWidget(onFolderSelected: ((String) -> Unit)? = null,isNotePageDialog : Boolean=false,folderViewModel: FolderViewModel,navController: NavController,
                  isSelectedFolders: MutableState<Boolean> = mutableStateOf(false), selectedFolderList: SnapshotStateList<FolderModel> = mutableStateListOf(),
-                 onFolderSelectedWithSelectedFolders: ((Long)->Unit)? = null,
+                 onFolderSelectedWithSelectedFolders: ((String)->Unit)? = null,
                  isSelectedFiles: MutableState<Boolean> = mutableStateOf(false)) {
     val allFolders by folderViewModel.allFolders.collectAsState(initial = emptyList())
     LazyVerticalGrid(
@@ -70,9 +70,9 @@ fun FolderWidget(onFolderSelected: ((Long) -> Unit)? = null,isNotePageDialog : B
 
 
 @Composable
-fun FolderItem(onFolderSelected: ((Long) -> Unit)?=null,isNotePageDialog : Boolean, card: FolderModel, navController: NavController,
+fun FolderItem(onFolderSelected: ((String) -> Unit)?=null,isNotePageDialog : Boolean, card: FolderModel, navController: NavController,
                isSelectedFolders: MutableState<Boolean>, selectedFolderList: SnapshotStateList<FolderModel>,
-               onFolderSelectedWithSelectedFolders: ((Long)->Unit)? = null, isSelectedFiles: MutableState<Boolean>) {
+               onFolderSelectedWithSelectedFolders: ((String)->Unit)? = null, isSelectedFiles: MutableState<Boolean>) {
 
     var modifier = if(isSelectedFolders.value&&card in selectedFolderList) {
         Modifier

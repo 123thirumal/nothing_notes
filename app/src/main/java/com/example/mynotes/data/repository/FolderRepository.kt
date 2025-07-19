@@ -7,8 +7,9 @@ import kotlinx.coroutines.flow.Flow
 class FolderRepository(
     private val folderDao: FolderDao
 ) {
-    suspend fun insertFolder(folder: FolderModel): Long{
-        return folderDao.insertFolder(folder)
+    suspend fun insertFolder(folder: FolderModel): String{
+        folderDao.insertFolder(folder)
+        return folder.id
     }
     suspend fun deleteFolder(folder: FolderModel){
         folderDao.deleteFolder(folder)
@@ -21,7 +22,7 @@ class FolderRepository(
         return folderDao.getAllFolders()
     }
 
-    suspend fun getFolderById(id: Long) : FolderModel {
+    suspend fun getFolderById(id: String) : FolderModel {
         return folderDao.getFolderById(id)
     }
 

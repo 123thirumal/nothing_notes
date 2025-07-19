@@ -91,7 +91,7 @@ import compose.icons.tablericons.Trash
 import kotlinx.coroutines.launch
 
 @Composable
-fun FolderPage(folderId:Long,navController: NavController, folderViewModel: FolderViewModel, noteViewModel: NoteViewModel,
+fun FolderPage(folderId:String,navController: NavController, folderViewModel: FolderViewModel, noteViewModel: NoteViewModel,
                lockViewModel: LockViewModel,noteBlockViewModel: NoteBlockViewModel){
 
 
@@ -340,7 +340,7 @@ fun FolderPage(folderId:Long,navController: NavController, folderViewModel: Fold
     val showDialogForAddFolderWithSelected = remember{mutableStateOf(false)}
     val showDialogForNewFolderWithSelected = remember { mutableStateOf(false) } //for creating new folder
 
-    fun updateFolderForSelectedFiles(folderId: Long){
+    fun updateFolderForSelectedFiles(folderId: String){
         coroutineScope.launch {
             selectedFilesListInFolder.forEach { note->
                 val updatedNote = note.copy(
@@ -628,7 +628,7 @@ fun FolderPage(folderId:Long,navController: NavController, folderViewModel: Fold
                                 coroutineScope.launch {
                                     selectedFilesListInFolder.forEach { note->
                                         val updatedNote = note.copy(
-                                            isPrivate = true,
+                                            Private = true,
                                         )
                                         noteViewModel.updateNote(updatedNote) //awaits
                                     }
@@ -866,7 +866,7 @@ fun FolderPage(folderId:Long,navController: NavController, folderViewModel: Fold
             if(isSelectedFilesInFolder.value){
                 FloatingActionButton(
                     onClick = {},
-                    containerColor = Color(0xDA19181E),
+                    containerColor = Color(0xFF19181E),
                     shape = RoundedCornerShape(30.dp),
                 ) {
                     Row(

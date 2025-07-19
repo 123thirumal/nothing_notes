@@ -25,3 +25,7 @@ captures/
 # Jetpack Compose Previews (optional)
 .idea/.preview/
 .idea/preview.html
+
+app/google-services.json
+
+

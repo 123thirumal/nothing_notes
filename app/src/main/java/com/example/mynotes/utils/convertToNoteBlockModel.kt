@@ -7,7 +7,7 @@ import com.google.gson.Gson
 
 fun convertToNoteBlockModel(
     block: NoteBlockEntityModel,
-    noteId: Long,
+    noteId: String,
     order: Int
 ): NoteBlockModel {
     when (block) {

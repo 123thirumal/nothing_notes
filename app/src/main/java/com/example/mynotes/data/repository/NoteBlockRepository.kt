@@ -7,11 +7,12 @@ import kotlinx.coroutines.flow.Flow
 class NoteBlockRepository(
     private val noteBlockDao: NoteBlockDao
 ) {
-    suspend fun insertNoteBlock(noteBlock: NoteBlockModel) : Long{
-        return noteBlockDao.insertNoteBlock(noteBlock)
+    suspend fun insertNoteBlock(noteBlock: NoteBlockModel) : String{
+        noteBlockDao.insertNoteBlock(noteBlock)
+        return noteBlock.id
     }
 
-    suspend fun getBlocksByNoteId(noteId: Long) : List<NoteBlockModel> {
+    suspend fun getBlocksByNoteId(noteId: String) : List<NoteBlockModel> {
         return noteBlockDao.getBlocksByNoteId(noteId)
     }
 
@@ -19,7 +20,7 @@ class NoteBlockRepository(
         noteBlockDao.deleteNoteBlock(noteBlock)
     }
 
-    suspend fun deleteBlocksByNoteId(noteId: Long){
+    suspend fun deleteBlocksByNoteId(noteId: String){
         noteBlockDao.deleteBlocksByNoteId(noteId)
     }
 

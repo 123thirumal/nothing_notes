@@ -32,11 +32,11 @@ class NoteBlockViewModel(
         noteBlockRepository.deleteNoteBlock(noteBlock)
     }
 
-    suspend fun deleteBlocksByNoteId(noteId: Long) {
+    suspend fun deleteBlocksByNoteId(noteId: String) {
         noteBlockRepository.deleteBlocksByNoteId(noteId)
     }
 
-    suspend fun getBlocksByNoteId(noteId: Long): List<NoteBlockModel> {
+    suspend fun getBlocksByNoteId(noteId: String): List<NoteBlockModel> {
         return noteBlockRepository.getBlocksByNoteId(noteId)
     }
 }

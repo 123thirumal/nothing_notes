@@ -2,4 +2,14 @@
 <resources>
 
     <style name="Theme.MyNotes" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Splash Screen Theme -->
+    <style name="Theme.MyNotes.Splash" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Set background color -->
+        <item name="android:windowSplashScreenBackground">#000000</item>
+
+        <!-- Set your app icon -->
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+
+    </style>
 </resources>

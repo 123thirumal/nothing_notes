@@ -59,7 +59,7 @@ fun RemovePrivateFilesPage(noteViewModel: NoteViewModel, isPrivateUnlocked: Muta
     LaunchedEffect(removePrivateFilesRequest.value) {
         if(removePrivateFilesRequest.value){
             privateFiles.value.forEach { note ->
-                val updatedNote = note.copy(isPrivate = false)
+                val updatedNote = note.copy(Private = false)
                 noteViewModel.updateNote(updatedNote)
             }
 

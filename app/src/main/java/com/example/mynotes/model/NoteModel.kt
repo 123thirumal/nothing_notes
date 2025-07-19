@@ -3,6 +3,7 @@ package com.example.mynotes.model
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
+import java.util.UUID
 
 
 @Entity(
@@ -15,10 +16,12 @@ import androidx.room.PrimaryKey
     )]
 )
 data class NoteModel(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    @PrimaryKey val id: String =  UUID.randomUUID().toString(),
     var title: String?="",
     val createdAt: Long = 0L,
     var updatedAt: Long = System.currentTimeMillis(),
-    var folderId: Long?=null,
-    var isPrivate: Boolean = false,
+    var folderId: String?=null,
+    var Private: Boolean = false,
+    val SavedInCloud: Boolean = false,
+    val Synced: Boolean = false
 ) {}

@@ -1,13 +1,10 @@
 package com.example.mynotes.data.viewmodel
 
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mynotes.data.Graph
 import com.example.mynotes.model.NoteModel
 import com.example.mynotes.data.repository.NoteRepository
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,8 +12,9 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import android.util.Log
+import androidx.compose.runtime.collectAsState
+
 
 class NoteViewModel( private val noteRepository: NoteRepository= Graph.noteRepository): ViewModel() {
 
@@ -28,20 +26,36 @@ class NoteViewModel( private val noteRepository: NoteRepository= Graph.noteRepos
         )
 
     val nonPrivateNotes: StateFlow<List<NoteModel>> = allNotes
-        .map { list -> list.filter { !it.isPrivate } }
+        .map { list -> list.filter {!it.Private }}
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
 
-    private val folderId = MutableStateFlow<Long?>(null)
+    val nonPrivateNotesInCloud: StateFlow<List<NoteModel>> = allNotes
+        .map { list -> list.filter { !it.Private && it.SavedInCloud } }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val nonPrivateNotesNotInCloud: StateFlow<List<NoteModel>> = allNotes
+        .map { list -> list.filter { !it.Private && !it.SavedInCloud } }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    private val folderId = MutableStateFlow<String?>(null)
 
     val folderNotes: StateFlow<List<NoteModel>> = folderId
         .filterNotNull()
         .flatMapLatest { id ->
             noteRepository.getNotesByFolderId(id)
-                .map { notes -> notes.filter { !it.isPrivate } } // <-- Filter here
+                .map { notes -> notes.filter { !it.Private } } // <-- Filter here
         }
         .stateIn(
             scope = viewModelScope,
@@ -51,7 +65,15 @@ class NoteViewModel( private val noteRepository: NoteRepository= Graph.noteRepos
 
 
     val privateNotes: StateFlow<List<NoteModel>> = allNotes
-        .map { notes -> notes.filter { it.isPrivate == true } }
+        .map { notes -> notes.filter { it.Private == true } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val privateNotesInCloud: StateFlow<List<NoteModel>> = allNotes
+        .map { notes -> notes.filter { it.Private == true && it.SavedInCloud } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val privateNotesNotInCloud: StateFlow<List<NoteModel>> = allNotes
+        .map { notes -> notes.filter { it.Private == true && !it.SavedInCloud } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
 
@@ -60,7 +82,7 @@ class NoteViewModel( private val noteRepository: NoteRepository= Graph.noteRepos
         return noteRepository.getNoteById(noteId)
     }
 
-    suspend fun getNoteById(id: Long): NoteModel {
+    suspend fun getNoteById(id: String): NoteModel {
         return noteRepository.getNoteById(id)
     }
 
@@ -74,9 +96,16 @@ class NoteViewModel( private val noteRepository: NoteRepository= Graph.noteRepos
         noteRepository.deleteNote(note)
     }
 
-    fun setFolderId(id: Long) { //for assigning the folderid variable for fetching notes
+    fun setFolderId(id: String) { //for assigning the folderid variable for fetching notes
                                 //Not for assigning the folder to which the notes belong, which can be done in updateNote function
         folderId.value = id
+    }
+
+
+    suspend fun makeAllNotesNotSavedInCloud(){
+        for(note in allNotes.value){
+            noteRepository.updateNote(note.copy(SavedInCloud = false, Synced = false))
+        }
     }
 
 }

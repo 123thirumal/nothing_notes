@@ -55,12 +55,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -70,13 +70,15 @@ import androidx.compose.material.Button
 import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.MicNone
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
@@ -109,8 +111,10 @@ import com.example.mynotes.model.ListModel
 import com.example.mynotes.model.NoteBlockEntityModel
 import com.example.mynotes.ui.theme.NDot55
 import com.example.mynotes.utils.AudioRecorderManager
+import com.example.mynotes.utils.SpeechToTextManager
 import com.example.mynotes.utils.convertToNoteBlockEntityModel
 import com.example.mynotes.utils.convertToNoteBlockModel
+import com.example.mynotes.utils.isNetworkAvailable
 import com.example.mynotes.widgets.FolderWidget
 import com.example.mynotes.widgets.noteblockwidgets.PhotoWidget
 import com.example.mynotes.widgets.noteblockwidgets.TextWidget
@@ -118,6 +122,8 @@ import com.example.mynotes.widgets.noteblockwidgets.VoiceWidget
 import com.example.mynotes.widgets.noteblockwidgets.list.BulletedListWidget
 import com.example.mynotes.widgets.noteblockwidgets.list.CheckListWidget
 import com.example.mynotes.widgets.noteblockwidgets.list.NumberedListWidget
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import compose.icons.TablerIcons
 import compose.icons.tablericons.ArrowLeft
 import compose.icons.tablericons.Camera
@@ -135,15 +141,20 @@ import compose.icons.tablericons.Refresh
 import compose.icons.tablericons.Settings
 import compose.icons.tablericons.Trash
 import compose.icons.tablericons.X
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.io.File
 
 @Composable
-fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, noteViewModel: NoteViewModel, newNote: Boolean, noteId: Long=-1L, navController: NavController, folderId:Long=-1L,
+fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, noteViewModel: NoteViewModel, newNote: Boolean, noteId: String="-1", navController: NavController, folderId:String = "-1",
              isPrivate: Boolean=false, noteBlockViewModel: NoteBlockViewModel,
              imageDemoViewModel: ImageDemoViewModel,//isPrivate for creating new note in private files
              ) {
+
+    val fireStore = FirebaseFirestore.getInstance()
 
 
     val isChangeMade = remember{mutableStateOf(false)}
@@ -165,7 +176,7 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
 
     val isInitialized = remember{mutableStateOf(false)}
     LaunchedEffect(newNote, noteId) {
-        if (!newNote && noteId != -1L) {
+        if (!newNote && noteId != "-1") {
             // Load existing note
 
             val loadedNote = noteViewModel.getNoteById(noteId) //awaits
@@ -174,17 +185,20 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
 
             currentNote.value=loadedNote
             cardTitle.value = loadedNote.title?:""
-            isCardLocked.value = loadedNote.isPrivate
+            isCardLocked.value = loadedNote.Private
 
             noteBlockEntityList.addAll(noteBlockViewModel.getBlocksByNoteId(noteId).map { convertToNoteBlockEntityModel(it) }) //awaits
+            if(noteBlockEntityList.isEmpty()){
+                noteBlockEntityList.add(NoteBlockEntityModel.TextBlock(description = mutableStateOf("")))
+            }
 
             isInitialized.value=true
         } else {
             // Create new note
 
             val newNoteModel = when {
-                isPrivate -> NoteModel(createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis(), isPrivate = true)
-                folderId == -1L -> NoteModel(createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis())
+                isPrivate -> NoteModel(createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis(), Private = true)
+                folderId == "-1" -> NoteModel(createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis())
                 else -> NoteModel(createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis(), folderId = folderId)
             }
 
@@ -194,11 +208,12 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
 
             currentNote.value=createdNote
             cardTitle.value = createdNote.title?:""
-            isCardLocked.value = createdNote.isPrivate
+            isCardLocked.value = createdNote.Private
 
             // Add one empty TextBlock
             noteBlockEntityList.add(NoteBlockEntityModel.TextBlock(description = mutableStateOf("")))
 
+            isChangeMade.value=true
             // Focus keyboard
             focusRequester.requestFocus()
             keyboardController?.show()
@@ -212,7 +227,9 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
     val context = LocalContext.current
 
 
-    var expandedList by remember { mutableStateOf(false) }
+    var expandedListForChecklist by remember { mutableStateOf(false) }
+    var expandedListForVoice by remember { mutableStateOf(false) }
+
     var expandedSettings by remember { mutableStateOf(false) }
 //    var selectedImageUri = remember { mutableStateOf<Uri?>(null) }
     var photoUri = remember { mutableStateOf<Uri?>(null) }
@@ -414,7 +431,7 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
     //for adding a note to a folder
     val showDialogForAddFolder = remember{mutableStateOf(false)}
 
-    fun updateFolder(folderId: Long){
+    fun updateFolder(folderId: String){
         coroutineScope.launch {
 
             val updatedNote = currentNote.value!!.copy(
@@ -591,6 +608,7 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
     }
 
 
+
     fun saveNote() {
         coroutineScope.launch {
             val note = currentNote.value
@@ -612,8 +630,104 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                     noteBlockViewModel.insertNoteBlock(convertedBlock)
                 }
                 Toast.makeText(context, "Note Saved", Toast.LENGTH_SHORT).show()
+
+
+
+
+                //===============================syncing notes to cloud============================
+                if(updatedNote.SavedInCloud){
+                    val uid = FirebaseAuth.getInstance().currentUser?.uid
+                    if (uid == null) {
+                        delay(200L)
+                        navController.popBackStack()
+                        return@launch
+                    }
+                    try {
+                        if (!isNetworkAvailable(context)) {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "Note not saved in cloud", Toast.LENGTH_SHORT).show()
+                            }
+
+                            //--------update note--------------//
+                            val updatedNote = note.copy(
+                                updatedAt = System.currentTimeMillis(),
+                                SavedInCloud = true,
+                                Synced = false
+                            )
+                            noteViewModel.updateNote(updatedNote)
+                            delay(200L)
+                            withContext(Dispatchers.Main) {
+                                navController.popBackStack()
+                            }
+                            return@launch
+                        }
+
+                        val notesRef = fireStore.collection("users").document(uid).collection("notes")
+
+
+                        val noteMap = mapOf(
+                            "title" to note.title,
+                            "createdAt" to note.createdAt,
+                            "updatedAt" to note.updatedAt,
+                            "folderId" to note.folderId,
+                            "Private" to note.Private,
+                            "SavedInCloud" to true,
+                            "Synced" to true
+                        )
+                        //store the note
+                        val noteDoc = notesRef.document(note.id)
+                        noteDoc.set(noteMap).await()
+
+                        //deleting the previous blocks
+                        val blocksRef = noteDoc.collection("blocks")
+                        val existingBlocks = blocksRef.get().await()
+                        for (doc in existingBlocks.documents) {
+                            doc.reference.delete().await()
+                        }
+
+                        val blocks = noteBlockViewModel.getBlocksByNoteId(note.id) // suspend
+                        for (block in blocks) {
+                            val blockMap = mapOf(
+                                "noteId" to block.noteId,
+                                "type" to block.type,
+                                "description" to block.description,
+                                "checklistItems" to block.checklistItems,
+                                "numberedItems" to block.numberedItems,
+                                "bulletedItems" to block.bulletedItems,
+                                "blockOrder" to block.blockOrder
+                            )
+                            //store the block
+                            blocksRef.document(block.id).set(blockMap).await()
+                        }
+
+
+                        val updatedNote = note.copy(
+                            updatedAt = System.currentTimeMillis(),
+                            SavedInCloud = true,
+                            Synced = true
+                        )
+                        noteViewModel.updateNote(updatedNote)
+
+
+                    } catch (e: Exception) {
+                        //  Error toast
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Error syncing notes: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                        val updatedNote = note.copy(
+                            updatedAt = System.currentTimeMillis(),
+                            SavedInCloud = true,
+                            Synced = false
+                        )
+                        noteViewModel.updateNote(updatedNote)
+                    }
+                }
+
+                delay(200L)
                 isChangeMade.value = false
-                navController.popBackStack()
+                withContext(Dispatchers.Main) {
+                    navController.popBackStack()
+                }
 
             }
         }
@@ -796,7 +910,9 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                         ))
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
-                        modifier = Modifier.padding(10.dp).fillMaxWidth()
+                        modifier = Modifier
+                            .padding(10.dp)
+                            .fillMaxWidth()
                             .clip(RoundedCornerShape(50.dp)),
                         colors = ButtonDefaults.buttonColors(
                             backgroundColor = Color(0xFFCB070D)
@@ -865,7 +981,9 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                         ))
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
-                        modifier = Modifier.padding(10.dp).fillMaxWidth()
+                        modifier = Modifier
+                            .padding(10.dp)
+                            .fillMaxWidth()
                             .clip(RoundedCornerShape(50.dp)),
                         colors = ButtonDefaults.buttonColors(
                             backgroundColor = Color(0xFFCB070D)
@@ -931,7 +1049,9 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Top
                 ) {
-                    Row(modifier = Modifier.fillMaxWidth().weight(0.1f),
+                    Row(modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.1f),
                         horizontalArrangement = Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically
                     ){
@@ -961,7 +1081,8 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                     Spacer( modifier = Modifier.height(80.dp))
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth().weight(0.9f),
+                            .fillMaxWidth()
+                            .weight(0.9f),
                         verticalArrangement = Arrangement.SpaceEvenly,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ){
@@ -1021,7 +1142,12 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                                                 modifier = Modifier
                                                     .width(5.dp)
                                                     .padding(horizontal = 2.dp)
-                                                    .fillMaxHeight(heightFactor.coerceIn(0.1f, 0.6f))
+                                                    .fillMaxHeight(
+                                                        heightFactor.coerceIn(
+                                                            0.1f,
+                                                            0.6f
+                                                        )
+                                                    )
                                                     .background(
                                                         if (isPlayRecording.value) Color.Red else Color.White,
                                                         RoundedCornerShape(2.dp)
@@ -1121,47 +1247,390 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                                         modifier = Modifier.size(35.dp)
                                     )
                                 }
-                                Button(onClick = {
-                                    voiceNoteUri.value= audioRecorderManager.getOutputFilePath().toString().toUri()
-                                    val last = noteBlockEntityList.lastOrNull()
-                                    if (last is NoteBlockEntityModel.TextBlock && last.description.value.trim().isBlank()) {
-                                        noteBlockEntityList.removeAt(noteBlockEntityList.size - 1)
-                                    }
-                                    val tempVoiceNote = mutableStateOf(voiceNoteUri.value)
-                                    noteBlockEntityList.add(NoteBlockEntityModel.VoiceBlock(uri = tempVoiceNote))
-                                    noteBlockEntityList.add(NoteBlockEntityModel.TextBlock(description = mutableStateOf("")))
-                                    isChangeMade.value=true
+                                Text(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(30.dp)).background(Color(0xFFCB070D))
+                                        .clickable(
+                                            onClick = {
+                                                voiceNoteUri.value= audioRecorderManager.getOutputFilePath().toString().toUri()
+                                                val last = noteBlockEntityList.lastOrNull()
+                                                if (last is NoteBlockEntityModel.TextBlock && last.description.value.trim().isBlank()) {
+                                                    noteBlockEntityList.removeAt(noteBlockEntityList.size - 1)
+                                                }
+                                                val tempVoiceNote = mutableStateOf(voiceNoteUri.value)
+                                                noteBlockEntityList.add(NoteBlockEntityModel.VoiceBlock(uri = tempVoiceNote))
+                                                noteBlockEntityList.add(NoteBlockEntityModel.TextBlock(description = mutableStateOf("")))
+                                                isChangeMade.value=true
 
-                                    voiceNoteUri.value=null
-                                    isStartRecording.value=false
-                                    isPlayRecording.value=false
-                                    timerSec.longValue=0
-                                    waveformBars.clear()
-                                    tempBarList.clear()
-                                    isShowDialogForVoiceNote.value=false
-
-                                },
-                                    colors = ButtonDefaults.buttonColors(
-                                        backgroundColor = Color(0xFFCB070D)
-                                    )  ,
-                                    modifier = Modifier.clip(RoundedCornerShape(50.dp))
-                                ) {
-                                    Text(
-                                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp),
-                                        text = "SAVE",
-                                        style = TextStyle(
-                                            fontFamily = NRegular,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
+                                                voiceNoteUri.value=null
+                                                isStartRecording.value=false
+                                                isPlayRecording.value=false
+                                                timerSec.longValue=0
+                                                waveformBars.clear()
+                                                tempBarList.clear()
+                                                isShowDialogForVoiceNote.value=false
+                                            }
                                         )
+                                        .padding(vertical = 18.dp, horizontal = 23.dp),
+                                    text = "SAVE",
+                                    style = TextStyle(
+                                        fontFamily = NRegular,
+                                        fontSize = 15.sp,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
                                     )
-                                }
+                                )
                             }
                         }
                     }
                 }
             }
+        }
+    }
+
+    //=====================================speech to text============================
+    val speechToText = remember{mutableStateOf("")}
+    val isStartSpeechToText = remember{mutableStateOf(false)}
+    val isListeningSpeechToText = remember{mutableStateOf(false)}
+    val isShowDialogForSpeechToText = remember{mutableStateOf(false)}
+
+    fun extractTextFromJson(json: String): String {
+        val regex = """"text"\s*:\s*"([^"]*)"""".toRegex()
+        val match = regex.find(json)
+        return match?.groupValues?.get(1) ?: ""
+    }
+
+
+    // instance for the model_en_us
+    val speechToTextManager = remember {
+        SpeechToTextManager(context) { it
+            if (it.isNotBlank()) {
+                val cleanText = extractTextFromJson(it)
+                speechToText.value += if(speechToText.value.isEmpty()) cleanText else " $cleanText"
+            }
+        }
+    }
+
+    val scrollStateForSpeechToText = rememberScrollState()
+
+    LaunchedEffect(speechToText.value) {
+        scrollStateForSpeechToText.animateScrollTo(scrollStateForSpeechToText.maxValue)
+    }
+
+
+    val audioPermissionLauncherForSpeechToText = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { granted ->
+            if (granted) {
+                // Only start recording if permission granted
+                speechToTextManager.loadModel{isShowDialogForSpeechToText.value=true}
+
+            } else {
+                Toast.makeText(context, "Microphone permission denied", Toast.LENGTH_SHORT).show()
+            }
+        }
+    )
+
+    fun transcribe(){
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+        ){
+            speechToTextManager.loadModel{isShowDialogForSpeechToText.value=true}
+        }
+        else{
+            // Request permission
+            audioPermissionLauncherForSpeechToText.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+
+
+    val micColor = remember { mutableStateOf("WHITE") }
+
+    LaunchedEffect(isListeningSpeechToText.value) {
+        while(isListeningSpeechToText.value){
+            micColor.value="RED"
+            delay(500L)
+            micColor.value="WHITE"
+            delay(500L)
+        }
+        micColor.value = "WHITE"
+    }
+
+    val showDialogForDiscardSpeechToText = remember { mutableStateOf(false) }
+    if (showDialogForDiscardSpeechToText.value) {
+        Dialog(onDismissRequest = {
+            showDialogForDiscardSpeechToText.value = false
+        }) {
+            Box(
+                modifier = Modifier
+                    .width(600.dp) // You can control width here!
+                    .wrapContentHeight()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFA131313))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "DISCARD TEXT TO SPEECH", style = TextStyle(
+                        fontFamily = NRegular,
+                        fontSize = 18.sp,
+                        color = Color(0xFFDEDEDE),
+                        textAlign = TextAlign.Center
+                    ))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(textAlign = TextAlign.Center,
+                        text = "This text isn't saved", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color(0xFFB6B6B6)
+                        ))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        modifier = Modifier
+                            .padding(10.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(50.dp)),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color(0xFFCB070D)
+                        ),
+                        onClick = {
+                            speechToTextManager.stopListening()
+                            isListeningSpeechToText.value=false
+                            speechToText.value=""
+                            isStartSpeechToText.value=false
+                            isListeningSpeechToText.value=false
+                            micColor.value="WHITE"
+                            showDialogForDiscardSpeechToText.value = false
+                            isShowDialogForSpeechToText.value=false
+                        }) {
+                        Text(modifier = Modifier.padding(vertical = 5.dp), text = "DISCARD", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        ))
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    TextButton(onClick = {
+                        showDialogForDiscardSpeechToText.value = false },
+                        border = BorderStroke(0.dp, Color.Transparent),
+                        colors = ButtonDefaults.buttonColors(
+                            backgroundColor = Color.Transparent
+                        )) {
+                        Text(text = "KEEP RECORDING", style = TextStyle(
+                            fontFamily = NRegular,
+                            fontSize = 14.sp,
+                            color = Color(0xFFB6B6B6),
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
+    //this is shown only if model is initialized
+    if(isShowDialogForSpeechToText.value){
+        Dialog(
+            onDismissRequest = {
+                if(isListeningSpeechToText.value||speechToText.value.isNotEmpty()){
+                    showDialogForDiscardSpeechToText.value=true
+                }
+                else{
+                    speechToTextManager.stopListening()
+                    speechToText.value=""
+                    isStartSpeechToText.value=false
+                    micColor.value="WHITE"
+                    isShowDialogForSpeechToText.value=false
+                }
+            },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize(0.95f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFA131313))
+                    .padding(5.dp),
+                contentAlignment = Alignment.TopStart
+            ){
+                Column(modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState())
+                    .padding(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Top
+                ) {
+                    Row(modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.1f),
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
+                    ){
+                        IconButton(onClick = {
+                            if(isListeningSpeechToText.value||speechToText.value.isNotEmpty()){
+                                showDialogForDiscardSpeechToText.value=true
+                            }
+                            else{
+                                speechToTextManager.stopListening()
+                                speechToText.value=""
+                                isStartSpeechToText.value=false
+                                micColor.value="WHITE"
+                                isShowDialogForSpeechToText.value=false
+                            }
+                        }) {
+                            Icon(
+                                imageVector = TablerIcons.X,
+                                contentDescription = "back",
+                                tint = Color.White,
+                                modifier = Modifier.size(23.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Speech To Text",
+                            style = TextStyle(fontFamily = NDot, fontSize = 28.sp, color = Color.White, fontWeight = FontWeight.Normal)
+
+                        )
+
+                    }
+                    Spacer( modifier = Modifier.height(10.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(0.9f),
+                        verticalArrangement = Arrangement.Top,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ){
+                        // Text
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(0.7f)
+                                .shadow(8.dp, RoundedCornerShape(20.dp), clip = false)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color(0xFF1F1F1F))
+                                .verticalScroll(scrollStateForSpeechToText)
+                                .padding(20.dp)
+                        ) {
+                            Text(
+                                text = if (speechToText.value.isEmpty()) "..." else speechToText.value,
+                                style = TextStyle(
+                                    fontFamily = NRegular,
+                                    fontSize = 16.sp,
+                                    color = Color(0xCBFFFFFF),
+                                    fontWeight = FontWeight.W100
+                                )
+                            )
+                        }
+
+
+                        //Buttons
+                        Row(modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(0.2f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween){
+
+                            //=======================dummy for space filling================
+                            Text(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(30.dp)).background(Color.Transparent)
+                                    .padding(vertical = 15.dp, horizontal = 20.dp),
+                                text = "SAVE",
+                                style = TextStyle(
+                                    fontFamily = NRegular,
+                                    fontSize = 13.sp,
+                                    color = Color.Transparent,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                            //================================================================
+
+                            IconButton(
+                                onClick = {
+                                    if(!isStartSpeechToText.value) {
+                                        isStartSpeechToText.value = true
+                                    }
+
+
+                                    if(isListeningSpeechToText.value){
+                                        speechToTextManager.stopListening()
+                                        isListeningSpeechToText.value=false
+                                    }
+                                    else{
+                                        speechToTextManager.startListening()
+                                        isListeningSpeechToText.value=true
+                                    }
+                                },
+                            ){
+                                Icon(
+                                    imageVector = if(micColor.value=="WHITE")Icons.Rounded.MicNone else Icons.Rounded.Mic,
+                                    contentDescription = "Mic",
+                                    tint = if(micColor.value=="WHITE") Color.White else Color.Red,
+                                    modifier = Modifier.size(65.dp)
+                                )
+                            }
+
+                            Text(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(30.dp)).background(if(isListeningSpeechToText.value||!isStartSpeechToText.value)Color.Transparent else Color(0xFFCB070D) )
+                                    .clickable(
+                                        onClick = {
+                                            if(!isListeningSpeechToText.value&&isStartSpeechToText.value){
+                                                //to save to text widget
+                                                val last = noteBlockEntityList.lastOrNull()
+                                                if (last is NoteBlockEntityModel.TextBlock && last.description.value.trim().isBlank()) {
+                                                    noteBlockEntityList.removeAt(noteBlockEntityList.size - 1)
+                                                }
+                                                val temp = speechToText.value.toString()
+                                                noteBlockEntityList.add(NoteBlockEntityModel.TextBlock(description = mutableStateOf(temp)))
+                                                isChangeMade.value=true
+                                                speechToText.value=""
+                                                isStartSpeechToText.value=false
+                                                isListeningSpeechToText.value=false
+                                                micColor.value="WHITE"
+                                                isShowDialogForSpeechToText.value=false
+                                            }
+                                        }
+                                    ).padding(vertical = 15.dp, horizontal = 20.dp),
+                                text = "SAVE",
+                                style = TextStyle(
+                                    fontFamily = NRegular,
+                                    fontSize = 15.sp,
+                                    color = if(isListeningSpeechToText.value||!isStartSpeechToText.value)Color.Transparent else Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+
+                        }
+                        Text(
+                            modifier = Modifier.weight(0.1f)
+                                .fillMaxWidth(),
+                            text = if(isListeningSpeechToText.value)"Listening..." else " ",
+                            style = TextStyle(
+                                fontFamily = NRegular, // Ensure NRegular is defined
+                                fontSize = 16.sp,
+                                color = Color(0xCB9B9B9B),
+                                fontWeight = FontWeight.W100
+                            ),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(noteBlockEntityList.size) {
+        if (noteBlockEntityList.isNotEmpty()) {
+            listState.animateScrollToItem(noteBlockEntityList.lastIndex)
         }
     }
 
@@ -1193,10 +1662,9 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                                 modifier = Modifier
                                     .size(25.dp)
                                     .clickable(onClick = {
-                                        if(isChangeMade.value){
-                                            showDialogWhenNotSaved.value=true
-                                        }
-                                        else{
+                                        if (isChangeMade.value) {
+                                            showDialogWhenNotSaved.value = true
+                                        } else {
                                             navController.popBackStack()
                                         }
                                     })
@@ -1335,9 +1803,9 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                                         else{
                                             coroutineScope.launch {
                                                 val updatedNote = currentNote.value!!.copy(
-                                                    isPrivate = !currentNote.value!!.isPrivate,
+                                                    Private = !currentNote.value!!.Private,
                                                 )
-                                                isCardLocked.value=updatedNote.isPrivate
+                                                isCardLocked.value=updatedNote.Private
                                                 currentNote.value = updatedNote
                                                 noteViewModel.updateNote(updatedNote) //awaits
                                                 if(isCardLocked.value){
@@ -1435,7 +1903,7 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                                 }
                                 Box {
                                     IconButton(
-                                        onClick = {expandedList=true},
+                                        onClick = {expandedListForChecklist=true},
                                         modifier = Modifier.padding(horizontal = 10.dp)
                                     ) {
                                         Icon(
@@ -1446,15 +1914,15 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                                         )
                                     }
                                     DropdownMenu(
-                                        expanded = expandedList,
-                                        onDismissRequest = {expandedList=false},
+                                        expanded = expandedListForChecklist,
+                                        onDismissRequest = {expandedListForChecklist=false},
                                         offset = DpOffset(x=(-20).dp,y= (0).dp),
                                         modifier = Modifier
                                             .background(Color(0xFA131313))
                                     ) {
                                         DropdownMenuItem(
                                             onClick = {
-                                                expandedList=false
+                                                expandedListForChecklist=false
                                                 val bulletList = mutableStateListOf<ListModel>()
                                                 bulletList.add(ListModel(description = ""))
                                                 val last = noteBlockEntityList.lastOrNull()
@@ -1475,7 +1943,7 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                                         Spacer(modifier = Modifier.height(10.dp))
                                         DropdownMenuItem(
                                             onClick = {
-                                                expandedList=false
+                                                expandedListForChecklist=false
                                                 val checkList = mutableStateListOf<CheckListModel>()
                                                 checkList.add(CheckListModel(description = ""))
                                                 val last = noteBlockEntityList.lastOrNull()
@@ -1496,7 +1964,7 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                                         Spacer(modifier = Modifier.height(10.dp))
                                         DropdownMenuItem(
                                             onClick = {
-                                                expandedList=false
+                                                expandedListForChecklist=false
                                                 val numberList = mutableStateListOf<ListModel>()
                                                 numberList.add(ListModel(description = ""))
                                                 val last = noteBlockEntityList.lastOrNull()
@@ -1524,42 +1992,83 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
                                         )
                                     }
                                 }
-
-                                IconButton(
-                                    onClick = {
-                                        isShowDialogForVoiceNote.value=true;
-                                    },
-                                    modifier = Modifier.padding(horizontal = 10.dp)) {
-                                    Icon(imageVector = TablerIcons.Microphone,
-                                        contentDescription = "Microphone",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(23.dp))
+                                Box {
+                                    IconButton(
+                                        onClick = {expandedListForVoice=true},
+                                        modifier = Modifier.padding(horizontal = 10.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = TablerIcons.Microphone,
+                                            contentDescription = "Voice",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(23.dp)
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = expandedListForVoice,
+                                        onDismissRequest = {expandedListForVoice=false},
+                                        offset = DpOffset(x=(-20).dp,y= (0).dp),
+                                        modifier = Modifier
+                                            .background(Color(0xFA131313))
+                                    ) {
+                                        DropdownMenuItem(
+                                            onClick = {
+                                                expandedListForVoice=false
+                                                isShowDialogForVoiceNote.value=true;
+                                            },
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically){
+                                                    Icon(imageVector = TablerIcons.Microphone,
+                                                        contentDescription = "Microphone",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(23.dp))
+                                                    Text(text = "Voice Note", modifier = Modifier.padding(start = 15.dp))
+                                                }
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        DropdownMenuItem(
+                                            onClick = {
+                                                expandedListForVoice=false
+                                                transcribe()
+                                            },
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically){
+                                                    Image(
+                                                        painter = painterResource(id= R.drawable.speech_to_text),
+                                                        contentDescription = "Transcription",
+                                                        modifier = Modifier
+                                                            .requiredSize(23.dp)
+                                                            .padding(start = 1.dp),
+                                                        colorFilter = ColorFilter.tint(Color.White),
+                                                        contentScale = ContentScale.Fit
+                                                    )
+                                                    Text(text = "Speech to Text", modifier = Modifier.padding(start = 15.dp))
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
                         Box{
                             Row{
-                                Button(
+                                Text(
                                     modifier = Modifier
-                                        .padding(2.dp)
-                                        .size(width = 80.dp, height = 50.dp)
-                                        .clip(RoundedCornerShape(30.dp)),
-                                    colors = ButtonDefaults.buttonColors(
-                                        backgroundColor = Color(0xFFCB070D)
-                                    ) ,
-                                    onClick = {
-                                        saveNote()
-                                    }) {
-                                    Text(
-                                        text = "SAVE",
-                                        style = TextStyle(
-                                            fontFamily = NRegular,
-                                            fontSize = 12.sp,
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        .clip(RoundedCornerShape(30.dp)).background(Color(0xFFCB070D))
+                                        .clickable(
+                                            onClick = {
+                                                saveNote()
+                                            }
+                                        ).padding(vertical = 15.dp, horizontal = 20.dp),
+                                    text = "SAVE",
+                                    style = TextStyle(
+                                        fontFamily = NRegular,
+                                        fontSize = 12.sp,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
                                     )
-                                }
+                                )
                             }
                         }
                     }
@@ -1568,7 +2077,8 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
         }
     ) { innerPadding ->
         Box(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
                 .padding(
                     top = innerPadding.calculateTopPadding() - 5.dp,
                     start = 5.dp,
@@ -1602,15 +2112,17 @@ fun NotePage(folderViewModel: FolderViewModel, lockViewModel: LockViewModel, not
             }
             else{
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(20.dp)).background(Color.Black),
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color.Black),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     itemsIndexed(noteBlockEntityList) { index, block ->
                         when (block) {
                             is NoteBlockEntityModel.TextBlock -> {
-                                if (index > 0 && noteBlockEntityList[index - 1] is NoteBlockEntityModel.TextBlock) {
+                                if (index > 0 && noteBlockEntityList[index - 1] is NoteBlockEntityModel.TextBlock && block.description.value.isEmpty()) {
                                     isChangeMade.value = true
                                     noteBlockEntityList.removeAt(index)
                                 } else {

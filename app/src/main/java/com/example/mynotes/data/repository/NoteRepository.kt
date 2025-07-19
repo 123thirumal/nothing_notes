@@ -7,11 +7,12 @@ import kotlinx.coroutines.flow.Flow
 class NoteRepository(
     private val noteDao: NoteDao
 ) {
-    suspend fun insertNote(note: NoteModel): Long{
-        return noteDao.insertNote(note)
+    suspend fun insertNote(note: NoteModel): String{
+        noteDao.insertNote(note)
+        return note.id
     }
 
-    fun getNotesByFolderId(folderId: Long) : Flow<List<NoteModel>>{
+    fun getNotesByFolderId(folderId: String) : Flow<List<NoteModel>>{
         return noteDao.getNotesByFolderId(folderId)
     }
 
@@ -19,7 +20,7 @@ class NoteRepository(
         return noteDao.getAllNotes()
     }
 
-    suspend fun getNoteById(id: Long) : NoteModel{
+    suspend fun getNoteById(id: String) : NoteModel{
         return noteDao.getNoteById(id)
     }
 

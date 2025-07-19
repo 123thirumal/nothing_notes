@@ -36,7 +36,7 @@ class FolderViewModel(private val folderRepository: FolderRepository=Graph.folde
         }
     }
 
-    fun getFolderById(id: Long,onResult: (FolderModel) -> Unit){
+    fun getFolderById(id: String,onResult: (FolderModel) -> Unit){
         viewModelScope.launch{
             val folder = folderRepository.getFolderById(id)
             onResult(folder)

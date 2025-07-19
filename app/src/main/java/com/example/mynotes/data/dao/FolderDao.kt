@@ -13,13 +13,13 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface FolderDao{
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertFolder(folder: FolderModel): Long
+    suspend fun insertFolder(folder: FolderModel)
 
     @Delete
     suspend fun deleteFolder(folder: FolderModel)
 
     @Query("SELECT * FROM `folders_table` WHERE id =:id")
-    suspend fun getFolderById(id: Long) :FolderModel
+    suspend fun getFolderById(id: String) :FolderModel
 
     @Update
     suspend fun updateFolder(folder: FolderModel)

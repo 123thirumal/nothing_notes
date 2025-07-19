@@ -1,6 +1,7 @@
 package com.example.mynotes.pages
 
-import android.app.Activity
+import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
@@ -66,6 +67,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
+import coil3.compose.AsyncImage
+import coil3.gif.GifDecoder
+import coil3.request.ImageRequest
 import com.example.mynotes.R
 import com.example.mynotes.model.FolderModel
 import com.example.mynotes.ui.theme.NRegular
@@ -73,23 +77,33 @@ import com.example.mynotes.data.viewmodel.FolderViewModel
 import com.example.mynotes.data.viewmodel.LockViewModel
 import com.example.mynotes.data.viewmodel.NoteBlockViewModel
 import com.example.mynotes.data.viewmodel.NoteViewModel
+import com.example.mynotes.model.NoteBlockModel
 import com.example.mynotes.model.NoteModel
 import com.example.mynotes.widgets.AppBarWidget
 import com.example.mynotes.widgets.NoteWidget
 import com.example.mynotes.widgets.FolderWidget
 import com.example.mynotes.widgets.PrivateWidget
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.firestore.FirebaseFirestore
 import compose.icons.TablerIcons
 import compose.icons.tablericons.Lock
 import compose.icons.tablericons.LockOpen
 import compose.icons.tablericons.Plus
 import compose.icons.tablericons.Trash
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 
 @Composable
 fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolean>, headSelect: MutableState<String>,
              lockViewModel: LockViewModel, noteViewModel: NoteViewModel, folderViewModel: FolderViewModel,
-             noteBlockViewModel: NoteBlockViewModel){
+             noteBlockViewModel: NoteBlockViewModel, currentUser: FirebaseUser?){
     val searchSelect: MutableState<Boolean> = remember{mutableStateOf(false)}
     fun searchToggle(){
         searchSelect.value = !searchSelect.value
@@ -276,7 +290,7 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
     val showDialogForAddFolderWithSelected = remember{mutableStateOf(false)}
     val showDialogForNewFolderWithSelected = remember { mutableStateOf(false) } //for creating new folder
 
-    fun updateFolderForSelectedFiles(folderId: Long){
+    fun updateFolderForSelectedFiles(folderId: String){
         coroutineScope.launch {
             selectedNoteList.forEach { note->
                 val updatedNote = note.copy(
@@ -566,7 +580,7 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                                 coroutineScope.launch {
                                     selectedNoteList.forEach { note->
                                         val updatedNote = note.copy(
-                                            isPrivate = true,
+                                            Private = true,
                                         )
                                         noteViewModel.updateNote(updatedNote) //awaits
                                     }
@@ -660,6 +674,12 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                     Spacer(modifier = Modifier.height(10.dp))
                     TextButton(
                         onClick = {
+                            //-----------
+                            Log.d("all-notes",noteViewModel.allNotes.value.toString())
+                            Log.d("nonPrivatenotes",noteViewModel.nonPrivateNotes.value.toString())
+
+                            Log.d("nonPrivatenotesInCLoud",noteViewModel.nonPrivateNotesInCloud.value.toString())
+                            //------------
                             showDialogForDeleteWithSelected.value = false
                         },
                         border = BorderStroke(0.dp, Color.Transparent),
@@ -755,10 +775,10 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                                 selectedFolderList.forEach { folder->
                                     folderViewModel.deleteFolder(folder)//awaits
                                 }
+                                Toast.makeText(context, "Folders Deleted", Toast.LENGTH_SHORT).show()
+                                selectedFolderList.clear()
+                                showDialogForFoldersDeleteWithSelected.value=false
                             }
-                            Toast.makeText(context, "Folders Deleted", Toast.LENGTH_SHORT).show()
-                            selectedFolderList.clear()
-                            showDialogForFoldersDeleteWithSelected.value=false
                         }) {
                         Text(modifier = Modifier.padding(vertical = 5.dp), text = "DELETE ONLY FOLDERS", style = TextStyle(
                             fontFamily = NRegular,
@@ -832,7 +852,7 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                             coroutineScope.launch {
                                 selectedNoteListInPrivate.forEach { note->
                                     val updatedNote = note.copy(
-                                        isPrivate = false,
+                                        Private = false,
                                     )
                                     noteViewModel.updateNote(updatedNote) //awaits
                                 }
@@ -942,6 +962,9 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
             }
         }
     }
+
+
+
     val activity = LocalActivity.current
     BackHandler(enabled = true) {
         when {
@@ -964,9 +987,6 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
     }
 
 
-
-
-
     Scaffold(containerColor = Color.Black,
         contentWindowInsets = WindowInsets.safeContent,
         floatingActionButton = {
@@ -976,7 +996,7 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                     if(isSelectedFiles.value){
                         FloatingActionButton(
                             onClick = {},
-                            containerColor = Color(0xDA19181E),
+                            containerColor = Color(0xFF19181E),
                             shape = RoundedCornerShape(30.dp),
                         ) {
                             Row(
@@ -1027,7 +1047,7 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                     else if(isSelectedFolders.value){
                         FloatingActionButton(
                             onClick = {},
-                            containerColor = Color(0xDA19181E),
+                            containerColor = Color(0xFF19181E),
                             shape = RoundedCornerShape(30.dp),
                         ) {
                             Row(
@@ -1053,7 +1073,7 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                     else if(isSelectedFilesInPrivate.value){
                         FloatingActionButton(
                             onClick = {},
-                            containerColor = Color(0xDA19181E),
+                            containerColor = Color(0xFF19181E),
                             shape = RoundedCornerShape(30.dp),
                         ) {
                             Row(
@@ -1139,7 +1159,8 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
                     AppBarWidget(searchSelect,::searchToggle, headSelect = headSelect, isUnlocked = isPrivateUnlocked,
                         showDialogForChangePassword = showDialogForChangePassword, navController = navController, isSelectedFiles= isSelectedFiles,
                         isSelectedFolders = isSelectedFolders, selectedFolderList = selectedFolderList, selectedNoteList = selectedNoteList,
-                        isSelectedFilesInPrivate = isSelectedFilesInPrivate, selectedFilesInPrivate = selectedNoteListInPrivate)
+                        isSelectedFilesInPrivate = isSelectedFilesInPrivate, selectedFilesInPrivate = selectedNoteListInPrivate,
+                        currentUser = currentUser, noteViewModel = noteViewModel, noteBlockViewModel = noteBlockViewModel,)
                 }
                 item{
                     if(!isSelectedFiles.value&&!isSelectedFolders.value&&!isSelectedFilesInPrivate.value){
@@ -1193,5 +1214,4 @@ fun HomePage(navController: NavController,isPrivateUnlocked: MutableState<Boolea
             }
         }
  }
-    //RecordingPage()
 }

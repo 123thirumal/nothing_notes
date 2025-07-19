@@ -4,6 +4,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
+import java.util.UUID
 
 @Entity(
     tableName = "note_blocks",
@@ -15,11 +16,11 @@ import androidx.room.PrimaryKey
     )]
 )
 data class NoteBlockModel(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
 
-    val noteId: Long, // Foreign key to NoteModel
+    val noteId: String="", // Foreign key to NoteModel
 
-    val type: String, // "text", "image", "bulleted_list", "numbered_list", "check_list", "voice_note"
+    val type: String="", // "text", "image", "bulleted_list", "numbered_list", "check_list", "voice_note"
 
     //for text
     val description: String? = null,
