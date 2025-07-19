@@ -28,4 +28,6 @@ captures/
 
 app/google-services.json
 
+notes_keystore.jks
 
+app/release
