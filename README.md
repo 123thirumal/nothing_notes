@@ -4,6 +4,9 @@
 
 ---
 
+### 📲 Download
+
+👉 [**Download the latest APK here**](https://drive.google.com/file/d/10DbDmAR_2Ezd3ogok8bT2uyPGGARSVAq/view?usp=drive_link)
 
 
 ---
